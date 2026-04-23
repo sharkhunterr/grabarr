@@ -71,9 +71,12 @@ class ShelfmarkConfigProxy:
         "USE_DOH": False,
         "USING_TOR": False,
         "USING_EXTERNAL_BYPASSER": True,
-        "EXT_BYPASSER_URL": "http://flaresolverr:8191/v1",
-        "EXT_BYPASSER_PATH": "",
-        "EXT_BYPASSER_TIMEOUT": 60,
+        # Host:port of FlareSolverr. Override with GRABARR_SHELFMARK_EXT_BYPASSER_URL
+        # (or just EXT_BYPASSER_URL) — e.g. "http://192.168.1.87:8191".
+        "EXT_BYPASSER_URL": "http://flaresolverr:8191",
+        # Endpoint path. FlareSolverr exposes /v1.
+        "EXT_BYPASSER_PATH": "/v1",
+        "EXT_BYPASSER_TIMEOUT": 60000,
         "HTTP_PROXY": "",
         "HTTPS_PROXY": "",
         "NO_PROXY": "",

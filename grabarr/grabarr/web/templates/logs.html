@@ -1,0 +1,156 @@
+{% extends "_base.html" %}
+{% block title %}Logs · Grabarr{% endblock %}
+
+{% block content %}
+<div class="flex flex-wrap items-start justify-between gap-4 mb-6">
+  <div>
+    <h1 class="page-title">Logs</h1>
+    <p class="page-subtitle">
+      Live tail of the in-process ring buffer. Secrets are redacted.
+      {% if log_file %}<br><span class="text-xs">Full rotating log on disk: <code>{{ log_file }}</code></span>{% endif %}
+    </p>
+  </div>
+  <div class="flex items-center gap-2">
+    <label class="inline-flex items-center gap-2 text-sm">
+      <input id="auto-scroll" type="checkbox" checked>
+      <span>Auto-scroll</span>
+    </label>
+    <label class="inline-flex items-center gap-2 text-sm">
+      <input id="follow" type="checkbox" checked>
+      <span>Follow</span>
+    </label>
+    <button type="button" class="btn-ghost btn-sm" onclick="clearView()">Clear</button>
+    <button type="button" class="btn-ghost btn-sm" onclick="copyAll()">Copy</button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <div class="flex flex-wrap items-end gap-3 mb-4">
+      <div class="flex-1 min-w-[180px]">
+        <label class="label" for="flt-level">Min level</label>
+        <select id="flt-level" class="w-full">
+          <option value="">All</option>
+          <option value="DEBUG">DEBUG+</option>
+          <option value="INFO" selected>INFO+</option>
+          <option value="WARNING">WARNING+</option>
+          <option value="ERROR">ERROR+</option>
+        </select>
+      </div>
+      <div class="flex-1 min-w-[220px]">
+        <label class="label" for="flt-logger">Logger starts-with</label>
+        <input id="flt-logger" class="w-full font-mono" placeholder="e.g. grabarr.adapters.anna_archive">
+      </div>
+      <div class="flex-1 min-w-[120px]">
+        <label class="label" for="flt-lines">Lines</label>
+        <input id="flt-lines" type="number" min="50" max="2000" value="500" class="w-full">
+      </div>
+      <div class="flex-1 min-w-[120px]">
+        <label class="label" for="flt-refresh">Refresh (s)</label>
+        <input id="flt-refresh" type="number" min="1" max="60" value="2" class="w-full">
+      </div>
+      <button type="button" class="btn-secondary" onclick="refreshNow()">Refresh</button>
+    </div>
+
+    <div id="log-stats" class="text-xs text-gray-500 dark:text-gray-400 mb-2">—</div>
+    <div id="log-box"
+         class="font-mono text-xs leading-5 bg-gray-950 text-gray-100 rounded-lg p-3 overflow-auto"
+         style="height: 65vh;"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% raw %}
+<script>
+  const LEVEL_CLASS = {
+    DEBUG: 'text-gray-400',
+    INFO: 'text-emerald-300',
+    WARNING: 'text-amber-300',
+    ERROR: 'text-red-300',
+    CRITICAL: 'text-red-400 font-bold',
+  };
+
+  let lastTs = null;
+  let timer = null;
+
+  function escHtml(s) {
+    return String(s ?? '')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function renderRow(e) {
+    const cls = LEVEL_CLASS[e.level] || 'text-gray-200';
+    const corr = e.correlation_id && e.correlation_id !== '-'
+      ? ` <span class="text-indigo-300">[${escHtml(e.correlation_id.slice(0, 8))}]</span>` : '';
+    const exc = e.exc_info
+      ? `<div class="text-red-300 whitespace-pre-wrap mt-1">${escHtml(e.exc_info)}</div>` : '';
+    return `<div>
+      <span class="text-gray-500">${escHtml(e.ts)}</span>
+      <span class="${cls}">${escHtml(e.level.padEnd(5))}</span>
+      <span class="text-sky-300">${escHtml(e.logger)}</span>${corr}:
+      <span>${escHtml(e.message)}</span>
+      ${exc}
+    </div>`;
+  }
+
+  async function poll(initial) {
+    const qs = new URLSearchParams();
+    qs.set('lines', document.getElementById('flt-lines').value || '500');
+    const lvl = document.getElementById('flt-level').value;
+    if (lvl) qs.set('level', lvl);
+    const lg = document.getElementById('flt-logger').value.trim();
+    if (lg) qs.set('logger', lg);
+    if (!initial && lastTs && document.getElementById('follow').checked) {
+      qs.set('since', lastTs);
+    }
+    const r = await fetch('/api/logs?' + qs.toString());
+    if (!r.ok) return;
+    const data = await r.json();
+    const items = data.items || [];
+    if (!items.length && !initial) return;
+
+    const box = document.getElementById('log-box');
+    if (initial || !document.getElementById('follow').checked) {
+      box.innerHTML = items.map(renderRow).join('');
+    } else {
+      box.insertAdjacentHTML('beforeend', items.map(renderRow).join(''));
+      // Cap DOM at ~3000 rows to keep things snappy.
+      while (box.children.length > 3000) box.removeChild(box.firstChild);
+    }
+    if (items.length) lastTs = items[items.length - 1].ts;
+
+    document.getElementById('log-stats').textContent =
+      `${box.children.length} rendered · ${data.count} matching · source: ${data.file || 'memory-only'}`;
+
+    if (document.getElementById('auto-scroll').checked) {
+      box.scrollTop = box.scrollHeight;
+    }
+  }
+
+  function schedule() {
+    if (timer) clearInterval(timer);
+    const secs = Math.max(1, parseInt(document.getElementById('flt-refresh').value || '2', 10));
+    timer = setInterval(() => poll(false), secs * 1000);
+  }
+
+  function refreshNow() { lastTs = null; poll(true); schedule(); }
+  function clearView() {
+    document.getElementById('log-box').innerHTML = '';
+    lastTs = null;
+  }
+  async function copyAll() {
+    const text = document.getElementById('log-box').innerText;
+    await navigator.clipboard.writeText(text);
+    toast('Copied', 'ok', 1200);
+  }
+
+  ['flt-level', 'flt-logger', 'flt-lines'].forEach(id =>
+    document.getElementById(id).addEventListener('change', refreshNow));
+  document.getElementById('flt-refresh').addEventListener('change', schedule);
+
+  poll(true);
+  schedule();
+</script>
+{% endraw %}
+{% endblock %}

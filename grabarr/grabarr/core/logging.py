@@ -16,10 +16,13 @@ from __future__ import annotations
 
 import json
 import logging
+import logging.handlers
 import os
 import re
 import sys
+from collections import deque
 from contextvars import ContextVar
+from pathlib import Path
 from typing import Any
 
 # ---- correlation ID context var ------------------------------------------
@@ -205,31 +208,89 @@ class _JsonFormatter(logging.Formatter):
         return json.dumps(payload, default=str)
 
 
+# ---- In-memory ring buffer (for the /api/logs endpoint) ------------------
+
+# Capped deque of recently-formatted lines + their raw record metadata.
+# Keeping both lets the API filter by level/logger cheaply without
+# re-formatting the whole buffer on every poll.
+_RING_CAPACITY = 2000
+_ring: deque[dict[str, Any]] = deque(maxlen=_RING_CAPACITY)
+
+
+class _RingBufferHandler(logging.Handler):
+    """Stash every record (structured) into the in-memory ring buffer.
+
+    The UI's live log view pulls from this buffer so operators can tail
+    the process without shelling into the container.
+    """
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            msg = record.getMessage()
+        except Exception:  # noqa: BLE001
+            msg = str(record.msg)
+        entry: dict[str, Any] = {
+            "ts": self.format_time(record),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": _redact_string(msg),
+            "correlation_id": getattr(record, "correlation_id", None),
+        }
+        if record.exc_info:
+            entry["exc_info"] = self.formatter.formatException(record.exc_info) if self.formatter else None
+        _ring.append(entry)
+
+    @staticmethod
+    def format_time(record: logging.LogRecord) -> str:
+        return logging.Formatter().formatTime(record, "%Y-%m-%dT%H:%M:%S")
+
+
+def ring_snapshot(
+    *,
+    lines: int = 500,
+    level: str | None = None,
+    logger_prefix: str | None = None,
+) -> list[dict[str, Any]]:
+    """Return the last ``lines`` entries, optionally filtered."""
+    items = list(_ring)
+    if level:
+        wanted = level.upper()
+        rank = {"DEBUG": 10, "INFO": 20, "WARNING": 30, "ERROR": 40, "CRITICAL": 50}
+        floor = rank.get(wanted, 20)
+        items = [e for e in items if rank.get(e["level"], 0) >= floor]
+    if logger_prefix:
+        items = [e for e in items if e["logger"].startswith(logger_prefix)]
+    return items[-lines:]
+
+
 # ---- Public API ----------------------------------------------------------
 
 
 _configured_root = False
+_log_file_path: Path | None = None
 
 
-def configure_root(level: str = "INFO", fmt: str = "text") -> None:
+def get_log_file_path() -> Path | None:
+    """Return the on-disk log file path (if file logging is enabled)."""
+    return _log_file_path
+
+
+def configure_root(
+    level: str = "INFO",
+    fmt: str = "text",
+    file_path: Path | str | None = None,
+) -> None:
     """Configure the root logger once at process start.
 
-    ``fmt`` is ``"text"`` (default) or ``"json"``. Subsequent calls are
-    idempotent — they only adjust the level and replace the formatter.
+    ``fmt`` is ``"text"`` (default) or ``"json"``. ``file_path`` enables
+    a rotating file handler at that location (10 MB × 5 backups).
+    Subsequent calls are idempotent — they only adjust the level and
+    replace the formatter.
     """
-    global _configured_root
+    global _configured_root, _log_file_path
 
     root = logging.getLogger()
     root.setLevel(level.upper())
-
-    if not _configured_root:
-        for h in list(root.handlers):
-            root.removeHandler(h)
-        handler = logging.StreamHandler(sys.stderr)
-        handler.addFilter(RedactionFilter())
-        handler.addFilter(CorrelationIdFilter())
-        root.addHandler(handler)
-        _configured_root = True
 
     formatter: logging.Formatter
     if fmt == "json" or os.environ.get("LOG_FORMAT", "").lower() == "json":
@@ -237,8 +298,43 @@ def configure_root(level: str = "INFO", fmt: str = "text") -> None:
     else:
         formatter = _TextFormatter()
 
+    if not _configured_root:
+        for h in list(root.handlers):
+            root.removeHandler(h)
+        stream_handler = logging.StreamHandler(sys.stderr)
+        stream_handler.addFilter(RedactionFilter())
+        stream_handler.addFilter(CorrelationIdFilter())
+        root.addHandler(stream_handler)
+
+        ring_handler = _RingBufferHandler()
+        ring_handler.addFilter(CorrelationIdFilter())
+        root.addHandler(ring_handler)
+
+        _configured_root = True
+
+    # File handler is attached on the FIRST call that passes file_path
+    # (could be a later lifespan call, after earlier setup_logger()
+    # imports already marked _configured_root = True).
+    if file_path is not None and _log_file_path is None:
+        fp = Path(file_path).expanduser().resolve()
+        fp.parent.mkdir(parents=True, exist_ok=True)
+        file_handler = logging.handlers.RotatingFileHandler(
+            fp, maxBytes=10 * 1024 * 1024, backupCount=5, encoding="utf-8"
+        )
+        file_handler.addFilter(RedactionFilter())
+        file_handler.addFilter(CorrelationIdFilter())
+        # File stays plaintext even under LOG_FORMAT=json so tailing
+        # is grep-friendly; JSON still goes to stderr.
+        file_handler.setFormatter(_TextFormatter())
+        root.addHandler(file_handler)
+        _log_file_path = fp
+
     for h in root.handlers:
-        h.setFormatter(formatter)
+        if isinstance(h, logging.handlers.RotatingFileHandler):
+            # File stays plaintext regardless of fmt.
+            h.setFormatter(_TextFormatter())
+        else:
+            h.setFormatter(formatter)
 
 
 def setup_logger(name: str) -> logging.Logger:

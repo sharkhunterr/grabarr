@@ -19,7 +19,7 @@ from typing import Any
 from fastapi import APIRouter, Body, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
-from grabarr.core.logging import setup_logger
+from grabarr.core.logging import get_log_file_path, ring_snapshot, setup_logger
 from grabarr.profiles.models import Profile
 from grabarr.profiles.orchestrator import test_profile as run_test_profile
 from grabarr.profiles.service import (
@@ -649,3 +649,30 @@ async def api_prowlarr_config(
             ),
         },
     )
+
+
+# ---- Logs --------------------------------------------------------------
+
+
+@router.get("/logs")
+async def api_logs(
+    lines: int = Query(200, ge=1, le=2000),
+    level: str | None = Query(None, description="DEBUG|INFO|WARNING|ERROR|CRITICAL"),
+    logger: str | None = Query(None, description="Only loggers starting with this prefix"),
+    since: str | None = Query(None, description="ISO ts — return only entries strictly after it"),
+) -> dict:
+    """Return the tail of the in-memory log ring buffer.
+
+    Secrets are redacted via ``RedactionFilter`` before entering the ring,
+    so what comes back is safe to display in the UI. The on-disk
+    ``grabarr.log`` file holds the full history (rotated at 10 MB).
+    """
+    items = ring_snapshot(lines=lines, level=level, logger_prefix=logger)
+    if since:
+        items = [i for i in items if i["ts"] > since]
+    path = get_log_file_path()
+    return {
+        "items": items,
+        "count": len(items),
+        "file": str(path) if path else None,
+    }

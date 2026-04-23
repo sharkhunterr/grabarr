@@ -108,8 +108,21 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """Start-up and shutdown wiring."""
     # 1. Load settings.
     settings = load_settings()
-    # 2. Configure logging with requested level/format.
-    configure_root(level=settings.logging.level, fmt=settings.logging.format)
+    # 2. Configure logging with requested level/format + on-disk rotation.
+    log_file: Path | None
+    raw = settings.logging.file
+    if raw in (None, "", "none", "off"):
+        log_file = None
+    elif raw in ("auto",):
+        log_file = Path(settings.server.data_dir) / "logs" / "grabarr.log"
+    else:
+        p = Path(raw)
+        log_file = p if p.is_absolute() else Path(settings.server.data_dir) / p
+    configure_root(
+        level=settings.logging.level,
+        fmt=settings.logging.format,
+        file_path=log_file,
+    )
     _log.info("Grabarr %s starting", __version__)
     # 3. Run migrations.
     _log.info("running Alembic migrations")

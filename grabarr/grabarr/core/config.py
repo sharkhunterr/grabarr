@@ -35,6 +35,9 @@ class LoggingConfig(BaseModel):
     level: str = "INFO"
     format: str = "text"                   # "text" | "json"
     modules: dict[str, str] = Field(default_factory=dict)
+    # Relative to server.data_dir when not absolute. Empty string ("")
+    # disables on-disk logging; "auto" / None uses the default path.
+    file: str | None = "auto"
 
 
 class ServerConfig(BaseModel):

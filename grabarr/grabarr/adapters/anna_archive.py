@@ -25,7 +25,9 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
+import socket
 from typing import Any
+from urllib.parse import urlparse
 
 from grabarr.adapters.base import (
     AdapterConnectivityError,
@@ -176,6 +178,55 @@ def _coerce_int(value: Any) -> int | None:
         return None
 
 
+def _probe_reachable(url: str, timeout: float = 3.0) -> bool:
+    """Return ``True`` if ``url`` accepts TCP connections on its host:port.
+
+    AA's slow_download pages often hand out mirrors (momot.rs, libgen.li,
+    etc.) that DNS-resolve fine but whose hosts block traffic from many
+    networks. A short connect-probe lets us fall through to the next
+    candidate instead of burning the 60s httpx timeout later.
+    """
+    try:
+        p = urlparse(url)
+    except Exception:
+        return False
+    host = p.hostname
+    if not host:
+        return False
+    port = p.port or (443 if p.scheme == "https" else 80)
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def _resolve_aa_candidate(url: str, direct_download: Any, title: str = "") -> str | None:
+    """Resolve a single candidate URL from ``BrowseRecord.download_urls``
+    to a direct file URL by delegating to Shelfmark's own resolver.
+
+    Shelfmark's ``_get_download_url(link, title, ...)`` handles every
+    supported source page: AA fast-download JSON API, AA slow_download
+    with countdown + multi-strategy extraction, LibGen ads.php,
+    Z-Library page, generic GET/Download anchor fallback. We just call
+    it and return the result.
+    """
+    if not url:
+        return None
+    fn = getattr(direct_download, "_get_download_url", None)
+    if not callable(fn):
+        # No extractor — return the URL raw and hope it's direct.
+        return url
+    try:
+        resolved = fn(url, title or url)
+    except Exception as exc:  # noqa: BLE001
+        # Propagate so the caller logs + tries the next candidate.
+        raise exc
+    if not resolved:
+        return None
+    return str(resolved)
+
+
 @register_adapter
 class AnnaArchiveAdapter:
     """AA source adapter — primary entry into the Shelfmark cascade."""
@@ -273,44 +324,75 @@ class AnnaArchiveAdapter:
     ) -> tuple[str, int | None, str | None, str]:
         """Invoke vendored cascade to resolve an external_id to a URL.
 
-        The full cascade (member-key fast path → slow tiers → LibGen →
-        Z-Lib → Welib → IPFS) lives in
-        ``direct_download._download_book``. Because that function drives
-        a full streaming download rather than just URL resolution, we
-        use the exposed ``get_book_info`` + ``_get_download_url`` helpers
-        where available; if the upstream API differs we fall back to
-        raising AdapterError so the orchestrator moves on.
+        Shelfmark v1.2.1 ``get_book_info(md5)`` returns a ``BrowseRecord``
+        whose ``download_urls: List[str]`` is populated with candidate
+        URLs from every discovered sub-source (aa-fast, aa-slow-*,
+        libgen, welib, zlib, ipfs) — mirror of what Shelfmark's own
+        ``_browse_record_to_release`` does.
+
+        We walk the list, trying to resolve each URL to a direct file.
+        For AA-slow pages we ask Shelfmark's vendored extractor to do
+        the JS/clipboard/span scraping; for libgen/welib/direct URLs
+        we use them as-is.
         """
         from grabarr.vendor.shelfmark.release_sources import direct_download
 
-        # Prefer a URL-resolution path if the vendored module exposes one.
-        for candidate_name in ("resolve_download_url", "_resolve_download_url"):
-            fn = getattr(direct_download, candidate_name, None)
-            if callable(fn):
-                url = fn(external_id)
-                return (url, None, None, external_id)
-
-        # Fallback: get_book_info gives us metadata + a best-guess URL in
-        # ``download_url``. This is the shape Shelfmark v1.2.1 ships.
         get_book_info = getattr(direct_download, "get_book_info", None)
-        if callable(get_book_info):
-            info = get_book_info(external_id, fetch_download_count=False)
-            url = getattr(info, "download_url", None) or getattr(info, "url", None)
-            if not url:
-                raise AdapterError(
-                    f"{self.id}: vendored get_book_info returned no usable URL"
-                )
-            size = getattr(info, "size_bytes", None) or getattr(info, "size", None)
-            return (
-                url,
-                _coerce_int(size),
-                getattr(info, "content_type", None),
-                getattr(info, "filename", None) or external_id,
+        if not callable(get_book_info):
+            raise AdapterError(
+                f"{self.id}: vendored direct_download exposes no get_book_info"
             )
 
+        info = get_book_info(external_id, fetch_download_count=False)
+        urls: list[str] = list(getattr(info, "download_urls", None) or [])
+        if not urls:
+            raise AdapterError(
+                f"{self.id}: vendored get_book_info returned empty download_urls "
+                f"for md5={external_id} (mirrors unreachable, or item is only "
+                "accessible through the login-gated fast-download API — set "
+                "AA_DONATOR_KEY to enable that)"
+            )
+
+        # Try each candidate URL in order. First one that resolves wins.
+        filename_hint = getattr(info, "filename", None) or external_id
+        size_hint = _parse_human_size(getattr(info, "size", None))
+        content_type_hint = getattr(info, "content_type", None)
+        book_title = getattr(info, "title", "") or ""
+
+        last_error: Exception | None = None
+        for candidate in urls:
+            try:
+                resolved = _resolve_aa_candidate(candidate, direct_download, book_title)
+            except Exception as exc:  # noqa: BLE001
+                last_error = exc
+                _log.info(
+                    "%s candidate resolution failed for %s: %s",
+                    self.id,
+                    candidate[:80],
+                    exc,
+                )
+                continue
+            if not resolved:
+                continue
+            if not _probe_reachable(resolved):
+                _log.info(
+                    "%s resolved URL is unreachable, trying next candidate: %s",
+                    self.id,
+                    resolved[:80],
+                )
+                last_error = ConnectionError(f"unreachable mirror: {resolved}")
+                continue
+            _log.info(
+                "%s resolved candidate: %s → %s",
+                self.id,
+                candidate[:60],
+                resolved[:80],
+            )
+            return (resolved, size_hint, content_type_hint, filename_hint)
+
         raise AdapterError(
-            f"{self.id}: vendored direct_download.py exposes neither "
-            "resolve_download_url nor get_book_info"
+            f"{self.id}: every candidate URL failed to resolve or was unreachable "
+            f"({len(urls)} tried; last error: {last_error})"
         )
 
     async def health_check(self) -> HealthStatus:

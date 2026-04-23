@@ -5,8 +5,8 @@
 # your LAN. Override with HOST=127.0.0.1 or PORT=9090 as needed.
 #
 # Usage:
-#   ./run.sh                          # dev default, reload OFF
-#   ./run.sh --reload                 # hot-reload on code changes
+#   ./run.sh                          # dev default — hot-reload ON
+#   RELOAD=0 ./run.sh                 # disable hot-reload
 #   HOST=127.0.0.1 ./run.sh           # bind local only
 #   GRABARR_TORRENT_MODE=webseed ./run.sh   # override any setting
 
@@ -14,6 +14,22 @@ set -e
 
 HOST="${HOST:-0.0.0.0}"
 PORT="${PORT:-8080}"
+RELOAD="${RELOAD:-1}"
+
+# CloudFlare bypasser — one knob instead of two. Accepts either a bare
+# host:port (http://flaresolverr:8191) or a full /v1 URL. Set this via
+# env var to avoid editing config files:
+#
+#   FLARESOLVERR_URL=http://192.168.1.50:8191 ./run.sh
+#
+if [ -n "${FLARESOLVERR_URL:-}" ]; then
+    # Strip a trailing /v1 so we end up with host+port in EXT_BYPASSER_URL.
+    FLARE_HOSTPORT="${FLARESOLVERR_URL%/v1}"
+    FLARE_HOSTPORT="${FLARE_HOSTPORT%/}"
+    export GRABARR_SHELFMARK_EXT_BYPASSER_URL="$FLARE_HOSTPORT"
+    export GRABARR_SHELFMARK_EXT_BYPASSER_PATH="/v1"
+    echo "[grabarr] FlareSolverr endpoint: $FLARE_HOSTPORT/v1"
+fi
 
 # Ensure the runtime dirs exist under the project root (not /data).
 mkdir -p data downloads/incoming downloads/ready
@@ -67,9 +83,26 @@ if [ "$HOST" = "0.0.0.0" ]; then
     echo "[grabarr]   Prowlarr indexer URL: http://$LAN_IP:$PORT/torznab/<profile_slug>/api"
 fi
 echo "[grabarr] Ctrl+C to stop. Data persisted under ./data/ and ./downloads/."
+
+RELOAD_ARGS=()
+if [ "$RELOAD" = "1" ] || [ "$RELOAD" = "true" ]; then
+    # Watch Python source + Jinja templates; skip data/downloads/cache
+    # dirs so writes there don't restart the server.
+    RELOAD_ARGS=(
+        --reload
+        --reload-dir grabarr
+        --reload-include "*.py"
+        --reload-include "*.html"
+        --reload-include "*.css"
+    )
+    echo "[grabarr] hot-reload ON (set RELOAD=0 to disable)"
+else
+    echo "[grabarr] hot-reload OFF"
+fi
 echo
 
 exec uv run uvicorn grabarr.api.app:app \
     --host "$HOST" \
     --port "$PORT" \
+    "${RELOAD_ARGS[@]}" \
     "$@"

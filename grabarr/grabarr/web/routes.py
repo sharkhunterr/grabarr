@@ -230,6 +230,18 @@ async def stats_page(request: Request) -> HTMLResponse:
     )
 
 
+@router.get("/logs", response_class=HTMLResponse)
+async def logs_page(request: Request) -> HTMLResponse:
+    """Live log viewer — reads the in-memory ring via /api/logs."""
+    from grabarr.core.logging import get_log_file_path
+
+    return templates.TemplateResponse(
+        request,
+        "logs.html",
+        {"log_file": str(get_log_file_path() or "")},
+    )
+
+
 @router.get("/notifications", response_class=HTMLResponse)
 async def notifications_page(request: Request) -> HTMLResponse:
     """Apprise URL list + recent dispatch log."""
