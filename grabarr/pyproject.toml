@@ -56,6 +56,28 @@ dependencies = [
     "cryptography>=43.0",
     # File I/O
     "aiofiles>=24.1",
+    # ---- Transitive runtime deps of vendored Shelfmark modules -----------
+    # Shelfmark's `download/network.py` uses dnspython for AA mirror DNS rotation.
+    "dnspython>=2.7",
+    # Shelfmark's `core/logger.py` uses psutil for disk-space sanity checks.
+    "psutil>=6.0",
+    # Shelfmark's download stack uses these helpers.
+    "tqdm>=4.66",
+    "rarfile>=4.2",
+    "defusedxml>=0.7",
+    "emoji>=2.14",
+    # Shelfmark's download clients — we do not invoke them, but they are
+    # imported eagerly by `download/clients/__init__.py`.
+    "qbittorrent-api>=2024.9",
+    "transmission-rpc>=7.0",
+    # Shelfmark is a Flask app; its routes are imported but not mounted by us.
+    "flask>=3.0",
+    "flask-cors>=5.0",
+    "flask-socketio>=5.4",
+    "gevent>=24.10",
+    "authlib>=1.3",
+    # Shelfmark still uses `requests` in some code paths (vs Grabarr's `httpx`).
+    "requests>=2.32",
 ]
 
 [project.optional-dependencies]

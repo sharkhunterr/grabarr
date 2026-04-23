@@ -1,0 +1,146 @@
+# Vendored from calibre-web-automated-book-downloader at v1.2.1 (019d36b27e3e8576eb4a4d6d76090ee442a05a44), 2026-04-23.
+# Original path: shelfmark/release_sources/irc/handler.py. Licensed MIT; see ATTRIBUTION.md.
+# Import paths were rewritten per Constitution §III; no logic change.
+"""IRC DCC download handler.
+
+Handles downloading IRC releases via DCC protocol.
+"""
+
+from pathlib import Path
+from threading import Event
+from typing import Callable, Optional
+
+from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy as config
+from grabarr.core.logging import setup_logger
+from grabarr.vendor.shelfmark.core.models import DownloadTask
+from grabarr.vendor.shelfmark.release_sources import DownloadHandler, register_handler
+
+from .connection_manager import connection_manager
+from .dcc import DCCError, download_dcc
+
+logger = setup_logger(__name__)
+
+
+@register_handler("irc")
+class IRCDownloadHandler(DownloadHandler):
+    """Handle IRC DCC downloads."""
+
+    def download(
+        self,
+        task: DownloadTask,
+        cancel_flag: Event,
+        progress_callback: Callable[[float], None],
+        status_callback: Callable[[str, Optional[str]], None],
+    ) -> Optional[str]:
+        """Download a release via IRC DCC. task.task_id contains the IRC request string."""
+        download_request = task.task_id
+        logger.info(f"IRC download: {download_request[:60]}...")
+
+        # Get IRC settings
+        server = config.get("IRC_SERVER", "")
+        port = config.get("IRC_PORT", 6697)
+        use_tls = config.get("IRC_USE_TLS", True)
+        channel = config.get("IRC_CHANNEL", "")
+        nick = config.get("IRC_NICK", "")
+
+        if not server or not channel or not nick:
+            logger.warning("IRC not fully configured")
+            status_callback("failed", "IRC not configured")
+            return None
+
+        client = None
+
+        def check_cancelled() -> bool:
+            """Check if cancelled and handle cleanup."""
+            if not cancel_flag.is_set():
+                return False
+            if client:
+                connection_manager.close_connection(client)
+            status_callback("cancelled", "Cancelled")
+            return True
+
+        try:
+            # Phase 1: Get or reuse IRC connection
+            status_callback("resolving", f"Connecting to {server}")
+
+            if check_cancelled():
+                return None
+
+            client = connection_manager.get_connection(
+                server=server,
+                port=port,
+                nick=nick,
+                use_tls=use_tls,
+                channel=channel,
+            )
+
+            # Phase 2: Send download request
+            status_callback("resolving", "Requesting file from bot")
+
+            if check_cancelled():
+                return None
+
+            # Send the full request line to the channel
+            client.send_message(f"#{channel}", download_request)
+
+            # Phase 3: Wait for DCC offer
+            status_callback("resolving", "Waiting for bot response")
+
+            offer = client.wait_for_dcc(timeout=120.0, result_type=False)
+
+            if not offer:
+                status_callback("error", "No response from bot")
+                connection_manager.release_connection(client)
+                return None
+
+            if check_cancelled():
+                return None
+
+            # Phase 4: Download via DCC
+            status_callback("downloading", "")
+
+            # Get file extension from offer filename
+            ext = Path(offer.filename).suffix.lstrip('.') or task.format or "epub"
+
+            # Stage to temp directory (lazy import to avoid circular import)
+            from shelfmark.download.staging import get_staging_path
+            staging_path = get_staging_path(task.task_id, ext)
+
+            download_dcc(
+                offer=offer,
+                dest_path=staging_path,
+                progress_callback=progress_callback,
+                cancel_flag=cancel_flag,
+                timeout=60.0,
+            )
+
+            # Release connection for reuse (don't close it)
+            connection_manager.release_connection(client)
+
+            if cancel_flag.is_set():
+                # Clean up partial download
+                staging_path.unlink(missing_ok=True)
+                status_callback("cancelled", "Cancelled")
+                return None
+
+            logger.info(f"Download complete: {staging_path}")
+            return str(staging_path)
+
+        except DCCError as e:
+            logger.error(f"DCC error: {e}")
+            status_callback("error", str(e))
+            if client:
+                connection_manager.close_connection(client)
+            return None
+
+        except Exception as e:
+            logger.error(f"Download failed: {e}")
+            status_callback("error", f"Download failed: {e}")
+            if client:
+                connection_manager.close_connection(client)
+            return None
+
+    def cancel(self, task_id: str) -> bool:
+        """Cancel an in-progress download (cleanup if cancel_flag fails)."""
+        logger.debug(f"Cancel requested for IRC task: {task_id}")
+        return True

@@ -1,14 +1,6 @@
-"""Vendored from calibre-web-automated-book-downloader at tag v1.2.1 (commit 019d36b27e3e8576eb4a4d6d76090ee442a05a44), 2026-04-23.
-
-Original file: shelfmark/download/outputs/booklore.py.
-
-Licensed MIT; see grabarr/vendor/shelfmark/ATTRIBUTION.md for the full license text.
-The only modifications applied during vendoring are import-path rewrites per
-Constitution Article III (`shelfmark.X` → `grabarr.vendor.shelfmark.X`) and
-substitution of the shelfmark config/logger with Grabarr's `_grabarr_adapter` shim.
-Original logic is unchanged.
-"""
-
+# Vendored from calibre-web-automated-book-downloader at v1.2.1 (019d36b27e3e8576eb4a4d6d76090ee442a05a44), 2026-04-23.
+# Original path: shelfmark/download/outputs/booklore.py. Licensed MIT; see ATTRIBUTION.md.
+# Import paths were rewritten per Constitution §III; no logic change.
 from __future__ import annotations
 
 import os
