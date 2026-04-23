@@ -84,6 +84,55 @@ def _to_shelfmark_filters(filters: SearchFilters, media_type: MediaType) -> Any:
     return ShelfFilters(**valid)
 
 
+def _parse_human_size(value: Any) -> int | None:
+    """Parse Shelfmark's human-readable size string ("2.5 MB", "8.1 GB") into bytes.
+
+    BrowseRecord.size is ``Optional[str]`` in the shipped Shelfmark
+    v1.2.1 — not an integer. Returns None if unparseable.
+    """
+    if value is None:
+        return None
+    if isinstance(value, int):
+        return value
+    s = str(value).strip()
+    if not s:
+        return None
+    # Simple regex: <number> <optional unit>
+    import re
+
+    m = re.match(r"^\s*([\d.,]+)\s*([a-zA-Z]*)\s*$", s)
+    if not m:
+        # Fallback: plain int string
+        try:
+            return int(s)
+        except ValueError:
+            return None
+    try:
+        num = float(m.group(1).replace(",", "."))
+    except ValueError:
+        return None
+    unit = m.group(2).lower()
+    mult = {
+        "": 1,
+        "b": 1,
+        "byte": 1,
+        "bytes": 1,
+        "k": 1024,
+        "kb": 1024,
+        "kib": 1024,
+        "m": 1024**2,
+        "mb": 1024**2,
+        "mib": 1024**2,
+        "g": 1024**3,
+        "gb": 1024**3,
+        "gib": 1024**3,
+        "t": 1024**4,
+        "tb": 1024**4,
+        "tib": 1024**4,
+    }.get(unit, 1)
+    return int(num * mult)
+
+
 def _browse_record_to_search_result(
     record: Any,
     source_id: str,
@@ -98,7 +147,7 @@ def _browse_record_to_search_result(
         year=_coerce_int(getattr(record, "year", None)),
         format=str(getattr(record, "format", "") or "") or "unknown",
         language=_first_or(getattr(record, "language", None)),
-        size_bytes=_coerce_int(getattr(record, "size", None)),
+        size_bytes=_parse_human_size(getattr(record, "size", None)),
         quality_score=float(getattr(record, "quality_score", 0.0) or 50.0),
         source_id=source_id,
         media_type=media_type,

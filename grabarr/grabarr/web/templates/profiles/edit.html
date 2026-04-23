@@ -213,40 +213,52 @@
     }));
   }
 
+  // Query form fields DIRECTLY instead of via FormData so we never
+  // get confused by duplicate `name=` attributes in the source list
+  // (enabled, weight, etc. appear both in sources and in the top-level
+  // profile section).
+  function fieldValue(selector) {
+    const el = document.querySelector(selector);
+    return el ? el.value : '';
+  }
+  function fieldChecked(selector) {
+    const el = document.querySelector(selector);
+    return el ? el.checked : false;
+  }
+  function splitCsv(s) {
+    return (s || '').split(',').map(x => x.trim()).filter(Boolean);
+  }
+
   async function saveProfile(e) {
     e.preventDefault();
-    const form = document.getElementById('profile-form');
-    const fd = new FormData(form);
-    const cats = (fd.get('newznab_categories') || '').split(',').map(s => s.trim()).filter(Boolean).map(Number);
-    const langs = (fd.get('languages') || '').split(',').map(s => s.trim()).filter(Boolean);
-    const formats = (fd.get('preferred_formats') || '').split(',').map(s => s.trim()).filter(Boolean);
 
     const body = {
-      name: fd.get('name'),
-      description: fd.get('description') || null,
-      media_type: fd.get('media_type'),
-      mode: fd.get('mode'),
-      newznab_categories: cats,
-      download_mode_override: fd.get('download_mode_override') || null,
-      torrent_mode_override: fd.get('torrent_mode_override') || null,
-      enabled: fd.get('enabled') === 'on',
+      name: fieldValue('#p-name'),
+      description: fieldValue('#p-description') || null,
+      media_type: fieldValue('#p-media_type'),
+      mode: fieldValue('#p-mode'),
+      newznab_categories: splitCsv(fieldValue('#p-categories')).map(Number),
+      download_mode_override: fieldValue('#p-download_mode') || null,
+      torrent_mode_override: fieldValue('#p-torrent_mode') || null,
+      enabled: fieldChecked('input[name="enabled"]:not(#source-list input)') ||
+               fieldChecked('form#profile-form > .card input[name="enabled"]'),
       sources: collectSources(),
       filters: {
-        languages: langs,
-        preferred_formats: formats,
-        min_year: fd.get('min_year') ? parseInt(fd.get('min_year')) : null,
-        max_year: fd.get('max_year') ? parseInt(fd.get('max_year')) : null,
+        languages: splitCsv(fieldValue('input[name="languages"]')),
+        preferred_formats: splitCsv(fieldValue('input[name="preferred_formats"]')),
+        min_year: parseInt(fieldValue('input[name="min_year"]')) || null,
+        max_year: parseInt(fieldValue('input[name="max_year"]')) || null,
         min_size_mb: null,
         max_size_mb: null,
         require_isbn: false,
-        extra_query_terms: fd.get('extra_query_terms') || '',
+        extra_query_terms: fieldValue('input[name="extra_query_terms"]') || '',
       }
     };
 
     const isNew = {{ 'true' if is_new else 'false' }};
     let url, method;
     if (isNew) {
-      body.slug = fd.get('slug');
+      body.slug = fieldValue('#p-slug');
       url = '/api/profiles';
       method = 'POST';
     } else {
@@ -254,17 +266,31 @@
       method = 'PATCH';
     }
 
+    console.log('[grabarr] PATCH body:', body);
     const r = await fetch(url, {
       method, headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(body),
     });
     if (!r.ok) {
-      const msg = await r.text();
-      alert('Save failed: ' + msg);
+      alert('Save failed: ' + await r.text());
       return false;
     }
-    window.location.href = '/profiles';
+    // Reload THIS page so you can verify every field persisted.
+    // Old behaviour (redirect to /profiles) made it impossible to
+    // confirm which fields actually saved.
+    const saved = await r.json();
+    const slug = isNew ? saved.slug : '{{ profile.slug }}';
+    window.location.href = `/profiles/${slug}/edit?saved=1`;
     return false;
+  }
+
+  // Show a toast when ?saved=1 is in the URL.
+  if (new URLSearchParams(window.location.search).get('saved') === '1') {
+    const div = document.createElement('div');
+    div.className = 'fixed bottom-4 right-4 z-50 rounded-md bg-green-600 text-white px-4 py-3 shadow-lg';
+    div.textContent = '✓ Saved';
+    document.body.appendChild(div);
+    setTimeout(() => div.remove(), 2500);
   }
 </script>
 {% endraw %}

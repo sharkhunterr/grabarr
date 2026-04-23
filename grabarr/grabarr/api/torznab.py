@@ -137,7 +137,15 @@ def _build_search_rss(
         size = r.size_bytes or 0
         download_url = f"{base_url}/download/{quote(token)}.torrent"
 
-        pub_date = format_datetime(dt.datetime.now(dt.UTC))
+        # pubDate drives Prowlarr's "Age" column. Use the item's year when
+        # known (Jan 1 UTC); fall back to "now" so brand-new items still
+        # have a sensible date.
+        if r.year and 1000 <= r.year <= 9999:
+            pub_date = format_datetime(
+                dt.datetime(r.year, 1, 1, 0, 0, 0, tzinfo=dt.UTC)
+            )
+        else:
+            pub_date = format_datetime(dt.datetime.now(dt.UTC))
 
         extras: list[str] = []
         if r.author:
