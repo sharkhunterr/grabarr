@@ -299,11 +299,11 @@ Single-project Python layout under the repository root; package is `grabarr/`, t
 
 **Independent Test**: Drop a new fake adapter in `tests/fixtures/adapters/`, start the service pointed at that package, confirm the fake appears in `/sources` and is usable in a profile.
 
-- [ ] T135 [P] [US5] Create `docs/DEVELOPING_ADAPTERS.md` — step-by-step guide with the full `SourceAdapter` Protocol signature, a minimal copy-pasteable adapter skeleton, `get_config_schema()` example, registration flow explanation.
-- [ ] T136 [P] [US5] Create `grabarr/adapters/_welib_template.py.example` — ~150-line reference implementation for a hypothetical Welib adapter (already vendored as part of AA's `_DOWNLOAD_SOURCES`), demonstrating the wrapper pattern; file ends in `.example` so the registry does NOT load it automatically.
-- [ ] T137 [US5] Create `tests/fixtures/adapters/fake_source.py` — minimal passing adapter used by the registry test.
-- [ ] T138 [US5] Create `tests/integration/test_us5_registry_discovery.py` — monkeypatch the adapter discovery path to include `tests.fixtures.adapters`, boot the service, assert the fake appears in `GET /api/sources`, assert a profile referencing it can be created and searched.
-- [ ] T139 [US5] Add a unit test `tests/unit/test_source_adapter_protocol.py` asserting each shipped adapter `isinstance`s the `SourceAdapter` Protocol at runtime (`runtime_checkable` enforces it).
+- [X] T135 [P] [US5] Create `docs/DEVELOPING_ADAPTERS.md` — step-by-step guide with the full `SourceAdapter` Protocol signature, a minimal copy-pasteable adapter skeleton, `get_config_schema()` example, registration flow explanation.
+- [X] T136 [P] [US5] Create `grabarr/adapters/_welib_template.py.example` — ~150-line reference implementation for a hypothetical Welib adapter (already vendored as part of AA's `_DOWNLOAD_SOURCES`), demonstrating the wrapper pattern; file ends in `.example` so the registry does NOT load it automatically.
+- [X] T137 [US5] Create `tests/fixtures/adapters/fake_source.py` — minimal passing adapter used by the registry test.
+- [X] T138 [US5] Create `tests/integration/test_us5_registry_discovery.py` — monkeypatch the adapter discovery path to include `tests.fixtures.adapters`, boot the service, assert the fake appears in `GET /api/sources`, assert a profile referencing it can be created and searched.
+- [X] T139 [US5] Add a unit test `tests/unit/test_source_adapter_protocol.py` asserting each shipped adapter `isinstance`s the `SourceAdapter` Protocol at runtime (`runtime_checkable` enforces it).
 
 **Checkpoint**: All five user stories complete. Remaining work is polish + cross-cutting.
 
@@ -315,8 +315,8 @@ Single-project Python layout under the repository root; package is `grabarr/`, t
 
 ### Observability (Constitution Article XIV, SC-010)
 
-- [ ] T140 [P] Create `grabarr/api/metrics.py` — `prometheus-client` exposition at `/metrics` with every counter/histogram/gauge from spec FR-028: per-source search/download counters, bypass invocations, error counts, response + download + bypass duration histograms, active downloads by mode, seeded torrents, queue depth, source health, quota remaining. Target: > 50 distinct series under load.
-- [ ] T141 [P] Extend `grabarr/core/logging.py` with a FastAPI middleware that attaches a `correlation_id` context var per request and includes it in every log record.
+- [X] T140 [P] Create `grabarr/api/metrics.py` — `prometheus-client` exposition at `/metrics` with every counter/histogram/gauge from spec FR-028: per-source search/download counters, bypass invocations, error counts, response + download + bypass duration histograms, active downloads by mode, seeded torrents, queue depth, source health, quota remaining. Target: > 50 distinct series under load.
+- [X] T141 [P] Extend `grabarr/core/logging.py` with a FastAPI middleware that attaches a `correlation_id` context var per request and includes it in every log record.
 - [ ] T142 [P] Create `grabarr/contrib/grafana-dashboard.json` — Grafana dashboard definition covering all metric families (can be imported cleanly into a fresh Grafana per SC-010).
 
 ### Admin UI — remaining pages (Constitution Article XVI)
@@ -331,13 +331,13 @@ Single-project Python layout under the repository root; package is `grabarr/`, t
 
 ### Background workers + cleanup (spec FR-039a, state invariants)
 
-- [ ] T150 [P] Create `grabarr/downloads/cleanup.py` — apscheduler task that removes files whose `ready_at + seed_retention_hours` has passed, clears `file_path`, sets `file_removed_at`.
+- [X] T150 [P] Create `grabarr/downloads/cleanup.py` — apscheduler task that removes files whose `ready_at + seed_retention_hours` has passed, clears `file_path`, sets `file_removed_at`.
 - [ ] T151 [P] Create `grabarr/downloads/post_processors.py` — ZIP/7Z/RAR extractors for `game_rom` and `software` media types, M3U playlist builder for multi-disc audio; configurable per media type via `settings.paths.post_processors`.
-- [ ] T152 [P] Create `grabarr/bypass/cache.py` — sweeper that purges `bypass_sessions` rows with `expires_at < NOW()`.
-- [ ] T153 [P] Extend `grabarr/torrents/tracker.py` — peer-TTL sweeper (already stubbed in T076; add the scheduled registration here).
-- [ ] T154 [P] Create `grabarr/profiles/cache.py` — `search_cache` TTL sweeper (15-minute entries).
-- [ ] T155 [P] Create `grabarr/notifications/cleanup.py` — `notifications_log` retention (30 days).
-- [ ] T156 [P] Create `grabarr/downloads/retention.py` — `downloads` row retention sweeper (30 days from `started_at`).
+- [X] T152 [P] Create `grabarr/bypass/cache.py` — sweeper that purges `bypass_sessions` rows with `expires_at < NOW()`.
+- [X] T153 [P] Extend `grabarr/torrents/tracker.py` — peer-TTL sweeper (already stubbed in T076; add the scheduled registration here).
+- [X] T154 [P] Create `grabarr/profiles/cache.py` — `search_cache` TTL sweeper (15-minute entries).
+- [X] T155 [P] Create `grabarr/notifications/cleanup.py` — `notifications_log` retention (30 days).
+- [X] T156 [P] Create `grabarr/downloads/retention.py` — `downloads` row retention sweeper (30 days from `started_at`).
 
 ### Unit tests (supporting acceptance criteria)
 
@@ -354,12 +354,12 @@ Single-project Python layout under the repository root; package is `grabarr/`, t
 
 ### Documentation
 
-- [ ] T167 [P] Create `README.md` at repo root — project pitch, quickstart link, feature matrix, non-goals, license note (GPL-3.0).
+- [X] T167 [P] Create `README.md` at repo root — project pitch, quickstart link, feature matrix, non-goals, license note (GPL-3.0).
 - [ ] T168 [P] Create `docs/quickstart.md` — mirror of `specs/001-grabarr-core-platform/quickstart.md` minus the acceptance-walkthrough section.
-- [ ] T169 [P] Create `docs/configuration.md` — every `settings` key + every `config.yaml` field with semantics, defaults, validity ranges.
-- [ ] T170 [P] Create `docs/troubleshooting.md` — the table from `quickstart.md` §"Common operator issues" plus an expanded FAQ.
-- [ ] T171 [P] Create `CHANGELOG.md` with a v1.0.0 entry.
-- [ ] T172 [P] Create `LICENSE` at repo root (GPL-3.0 per Constitution §Technology Stack).
+- [X] T169 [P] Create `docs/configuration.md` — every `settings` key + every `config.yaml` field with semantics, defaults, validity ranges.
+- [X] T170 [P] Create `docs/troubleshooting.md` — the table from `quickstart.md` §"Common operator issues" plus an expanded FAQ.
+- [X] T171 [P] Create `CHANGELOG.md` with a v1.0.0 entry.
+- [X] T172 [P] Create `LICENSE` at repo root (GPL-3.0 per Constitution §Technology Stack).
 
 ### Release gate
 

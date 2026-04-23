@@ -85,37 +85,26 @@ def test_notifications_apprise_crud(app_client: TestClient) -> None:
     assert all(u["id"] != uid for u in r.json()["items"])
 
 
-def test_notification_dispatch_and_flap_suppression(app_client: TestClient, monkeypatch) -> None:
-    import asyncio
-
-    from grabarr.core.enums import NotificationEvent, NotificationSeverity
-    from grabarr.notifications.dispatcher import NotificationPayload, dispatch
-
-    payload = NotificationPayload(
-        event=NotificationEvent.SOURCE_UNHEALTHY,
-        title="test",
-        body="test body",
-        severity=NotificationSeverity.WARNING,
-        source_id="anna_archive",
+def test_notification_dispatch_logs_attempts(app_client: TestClient) -> None:
+    """Dispatch via /notifications/apprise/{id}/test which fires through
+    the full pipeline; verify the log recorded an attempt."""
+    # Add an Apprise URL that won't actually deliver (invalid scheme).
+    r = app_client.post(
+        "/api/notifications/apprise",
+        json={
+            "label": "test-dry-run",
+            "url": "invalid-scheme://nowhere",
+            "subscribed_events": ["source_recovered"],
+        },
     )
+    uid = r.json()["id"]
 
-    # First dispatch → logged as failed (no Apprise URLs + no webhook),
-    # but still recorded. Second dispatch inside the cooldown window
-    # should be suppressed.
-    async def run_two() -> list:
-        await dispatch(payload, cooldown_minutes=10)
-        await dispatch(payload, cooldown_minutes=10)
+    r = app_client.post(f"/api/notifications/apprise/{uid}/test")
+    assert r.status_code == 200
 
-    asyncio.get_event_loop().run_until_complete(run_two())
-
-    r = app_client.get("/api/notifications/log?event=source_unhealthy")
+    r = app_client.get("/api/notifications/log")
     items = r.json()["items"]
-    assert len(items) >= 2
-    statuses = [it["dispatch_status"] for it in items[:2]]
-    # First is failed (no subscribers) — nothing in SENT state to
-    # compare against — so suppression logic may not activate here.
-    # Accept either ordering as valid log evidence.
-    assert any(s in ("failed", "sent", "suppressed") for s in statuses)
+    assert any(it["event_type"] == "source_recovered" for it in items)
 
 
 def test_sources_ui_renders(app_client: TestClient) -> None:

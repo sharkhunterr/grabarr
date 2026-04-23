@@ -27,6 +27,7 @@ from sqlalchemy import select
 from grabarr import __version__
 from grabarr.api.admin import router as admin_router
 from grabarr.api.health import router as health_router
+from grabarr.api.metrics import router as metrics_router
 from grabarr.api.torznab import router as torznab_router
 from grabarr.torrents.tracker import router as tracker_router
 from grabarr.web.routes import mount_static, router as web_router
@@ -124,10 +125,12 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # 5. Bridge Shelfmark vendored code to the settings backend.
     install_shelfmark_bridge(_SettingsBackend())
 
-    # 6. Start adapter health monitor in the background.
+    # 6. Start adapter health monitor + cleanup sweeper in the background.
     from grabarr.adapters.health import start_monitor, stop_monitor
+    from grabarr.downloads.cleanup import start_sweeper, stop_sweeper
 
     await start_monitor(period_seconds=60)
+    await start_sweeper()
 
     _log.info("Grabarr %s ready", __version__)
 
@@ -135,6 +138,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
     _log.info("Grabarr shutting down")
     await stop_monitor()
+    await stop_sweeper()
     # Persist libtorrent session state if the active-seed server was booted.
     try:
         from grabarr.torrents.active_seed import shutdown_active_seed_server
@@ -160,6 +164,7 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
     app.include_router(health_router)
+    app.include_router(metrics_router)
     app.include_router(admin_router)
     app.include_router(torznab_router)
     app.include_router(tracker_router)

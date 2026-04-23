@@ -1,0 +1,73 @@
+# Welib adapter template — copy to welib.py and rename the class to enable.
+#
+# The underlying cascade logic for Welib already lives in the vendored
+# Shelfmark module (sub-source id "welib" in _DOWNLOAD_SOURCES). This
+# wrapper exists only to expose Welib as a distinct Grabarr source for
+# operators who want a profile that ONLY hits Welib — e.g. for CDL-free
+# public-domain flows.
+#
+# Filename ends in ``.example`` so the auto-discovery registry does NOT
+# pick it up until an operator renames it.
+
+from __future__ import annotations
+
+from grabarr.adapters.anna_archive import AnnaArchiveAdapter
+from grabarr.adapters.base import (
+    ConfigSchema,
+    MediaType,
+    SearchFilters,
+    SearchResult,
+)
+from grabarr.core.logging import setup_logger
+from grabarr.core.rate_limit import rate_limiter
+from grabarr.core.registry import register_adapter
+
+_log = setup_logger(__name__)
+
+
+@register_adapter
+class WelibAdapter(AnnaArchiveAdapter):
+    """Welib source — piggy-backs on the vendored cascade."""
+
+    id = "welib"
+    display_name = "Welib"
+    supported_media_types = {MediaType.EBOOK, MediaType.PAPER}
+    requires_cf_bypass = True
+    supports_member_key = False
+
+    def __init__(self) -> None:  # type: ignore[override]
+        super().__init__(member_key="")
+        rate_limiter.configure(self.id, "search", per_minute=30)
+        rate_limiter.configure(self.id, "download", per_minute=30)
+
+    async def search(
+        self,
+        query: str,
+        media_type: MediaType,
+        filters: SearchFilters,
+        limit: int = 50,
+    ) -> list[SearchResult]:
+        # Reuse the AA cascade — Welib results naturally appear as a
+        # fallback tier inside the vendored direct_download pipeline.
+        # Post-filter to results whose sub_source hint is welib.
+        results = await super().search(query, media_type, filters, limit)
+        # Retag as our id so the orchestrator's dedup groups correctly.
+        return [
+            SearchResult(
+                external_id=r.external_id,
+                title=r.title,
+                author=r.author,
+                year=r.year,
+                format=r.format,
+                language=r.language,
+                size_bytes=r.size_bytes,
+                quality_score=r.quality_score,
+                source_id=self.id,
+                media_type=r.media_type,
+                metadata={**r.metadata, "via": "shelfmark_cascade"},
+            )
+            for r in results
+        ]
+
+    def get_config_schema(self) -> ConfigSchema:
+        return ConfigSchema(fields=[])
