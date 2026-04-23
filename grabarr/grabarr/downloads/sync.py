@@ -64,23 +64,47 @@ async def sync_download(
     ready_path = ready / filename
 
     size_so_far = 0
-    content_type: str | None = None
+    content_type: str | None = info.content_type
 
-    timeout = httpx.Timeout(connect=30.0, read=float(timeout_seconds), write=30.0, pool=30.0)
-    headers = dict(info.extra_headers or {})
-    # Preserve adapter-supplied UA; default to httpx's otherwise.
-    async with httpx.AsyncClient(timeout=timeout, headers=headers, follow_redirects=True) as client:
-        async with client.stream("GET", info.download_url) as response:
-            response.raise_for_status()
-            content_type = response.headers.get("content-type")
-            async with aiofiles.open(incoming_path, "wb") as out:
-                async for chunk in response.aiter_bytes(chunk_size):
-                    size_so_far += len(chunk)
-                    if size_so_far > max_size_bytes:
-                        raise SyncDownloadFailed(
-                            f"source exceeded max_size_bytes={max_size_bytes}"
-                        )
-                    await out.write(chunk)
+    # Adapter-delivered local file: skip the HTTP call entirely.
+    if info.local_path is not None:
+        src = Path(info.local_path)
+        if not src.exists():
+            raise SyncDownloadFailed(
+                f"adapter reported local_path={src} but the file does not exist"
+            )
+        size_so_far = src.stat().st_size
+        if size_so_far > max_size_bytes:
+            raise SyncDownloadFailed(
+                f"adapter file size {size_so_far} exceeds max_size_bytes={max_size_bytes}"
+            )
+        async with aiofiles.open(src, "rb") as rd, aiofiles.open(incoming_path, "wb") as wr:
+            while True:
+                chunk = await rd.read(chunk_size)
+                if not chunk:
+                    break
+                await wr.write(chunk)
+        # Best-effort cleanup of the adapter's temp copy.
+        try:
+            src.unlink()
+        except OSError:
+            pass
+    else:
+        timeout = httpx.Timeout(connect=30.0, read=float(timeout_seconds), write=30.0, pool=30.0)
+        headers = dict(info.extra_headers or {})
+        # Preserve adapter-supplied UA; default to httpx's otherwise.
+        async with httpx.AsyncClient(timeout=timeout, headers=headers, follow_redirects=True) as client:
+            async with client.stream("GET", info.download_url) as response:
+                response.raise_for_status()
+                content_type = response.headers.get("content-type")
+                async with aiofiles.open(incoming_path, "wb") as out:
+                    async for chunk in response.aiter_bytes(chunk_size):
+                        size_so_far += len(chunk)
+                        if size_so_far > max_size_bytes:
+                            raise SyncDownloadFailed(
+                                f"source exceeded max_size_bytes={max_size_bytes}"
+                            )
+                        await out.write(chunk)
 
     report = verify_file(
         incoming_path,

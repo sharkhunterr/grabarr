@@ -700,12 +700,21 @@ async def api_bypass_test(body: dict[str, Any] = Body(default_factory=dict)) -> 
         v1 = f"{endpoint}/v1"
 
     target = body.get("target") or "https://annas-archive.gl/"
+    # Pick up the user-configured maxTimeout (ms) from the settings cache.
+    from grabarr.core.settings_service import get_sync as _get_sync
 
-    # 2. POST request.get to FlareSolverr with a 30s timeout.
-    payload = {"cmd": "request.get", "url": target, "maxTimeout": 25000}
+    try:
+        max_timeout_ms = int(body.get("max_timeout_ms") or _get_sync("bypass.flaresolverr_timeout_ms", 120000))
+    except (TypeError, ValueError):
+        max_timeout_ms = 120000
+    # httpx timeout = maxTimeout + 15 s buffer for FlareSolverr overhead.
+    client_timeout = (max_timeout_ms / 1000) + 15
+
+    # 2. POST request.get to FlareSolverr.
+    payload = {"cmd": "request.get", "url": target, "maxTimeout": max_timeout_ms}
     t0 = time.monotonic()
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=client_timeout) as client:
             r = await client.post(
                 v1,
                 json=payload,
@@ -725,7 +734,7 @@ async def api_bypass_test(body: dict[str, Any] = Body(default_factory=dict)) -> 
             "endpoint": v1,
             "probe_target": target,
             "elapsed_ms": int((time.monotonic() - t0) * 1000),
-            "message": "No response within 30 s — is FlareSolverr running?",
+            "message": f"No response within {int(client_timeout)} s — is FlareSolverr running?",
         }
     except Exception as exc:  # noqa: BLE001
         return {

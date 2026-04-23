@@ -92,12 +92,19 @@ class ShelfmarkConfigProxy:
             "zip", "iso", "7z", "rar",
         ],
         # Slow-source priority — Shelfmark honours this ordering within
-        # the AA cascade. Matches Constitution Article VII.
+        # the AA cascade. Shape matches upstream ``_get_slow_source_defaults``
+        # in ``shelfmark.config.settings``: list of {id, enabled} dicts.
         "SOURCE_PRIORITY": [
-            "welib", "aa-slow-nowait", "aa-slow-wait", "aa-slow",
-            "libgen", "zlib", "ipfs",
+            {"id": "aa-slow-nowait", "enabled": True},
+            {"id": "aa-slow-wait", "enabled": True},
+            {"id": "welib", "enabled": True},
+            {"id": "zlib", "enabled": True},
         ],
-        "FAST_SOURCES_DISPLAY": ["aa-fast"],
+        # Fast sources — only aa-fast is useful (and requires a donator key).
+        "FAST_SOURCES_DISPLAY": [
+            {"id": "aa-fast", "enabled": True},
+            {"id": "libgen", "enabled": True},
+        ],
         # File naming
         "FILE_ORGANIZATION": "rename",
         # Legacy Shelfmark settings we do not use but that vendored code

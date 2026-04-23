@@ -104,10 +104,15 @@
       <div>
         <label class="label" for="s-b-mode">Mode</label>
         <select id="s-b-mode" name="bypass.mode" class="w-full">
-          {% for m in ['external', 'internal', 'auto'] %}
-            <option value="{{ m }}" {% if settings['bypass.mode'] == m %}selected{% endif %}>{{ m }}</option>
-          {% endfor %}
+          <option value="external" {% if settings['bypass.mode'] == 'external' %}selected{% endif %}>external — FlareSolverr</option>
+          <option value="internal" {% if settings['bypass.mode'] == 'internal' %}selected{% endif %}>internal — local headless Chromium</option>
+          <option value="off" {% if settings['bypass.mode'] == 'off' %}selected{% endif %}>off — no bypass (AA fast-download only)</option>
         </select>
+        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          <strong>internal</strong> needs <code>uv sync --extra internal-bypasser</code>
+          + Chromium/Chrome on the host. <strong>off</strong> skips CF entirely —
+          only works if you have an AA donator key set in <code>config.yaml</code>.
+        </p>
       </div>
       <div>
         <label class="label" for="s-b-url">FlareSolverr URL</label>
@@ -115,8 +120,17 @@
                value="{{ settings['bypass.flaresolverr_url'] }}"
                placeholder="http://192.168.1.50:8191">
         <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-          Host &amp; port only — <code>/v1</code> is appended automatically.
+          Host &amp; port (with or without trailing <code>/v1</code>).
           Or set <code>FLARESOLVERR_URL</code> env var before launching.
+        </p>
+      </div>
+      <div>
+        <label class="label" for="s-b-timeout">FlareSolverr timeout (ms)</label>
+        <input id="s-b-timeout" type="number" name="bypass.flaresolverr_timeout_ms" class="w-full"
+               value="{{ settings['bypass.flaresolverr_timeout_ms'] }}" min="10000" step="5000">
+        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          AA slow_download pages need ≥ 90 000 ms (60 s countdown + CF challenge).
+          Default 120 000.
         </p>
       </div>
       <div>

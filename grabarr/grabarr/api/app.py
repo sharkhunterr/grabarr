@@ -107,8 +107,19 @@ class _SettingsBackend:
             if not raw:
                 return default
             return "/v1"
+        if key == "EXT_BYPASSER_TIMEOUT":
+            # Shelfmark expects milliseconds.
+            try:
+                return int(get_sync("bypass.flaresolverr_timeout_ms", 120000))
+            except (TypeError, ValueError):
+                return 120000
         if key == "USING_EXTERNAL_BYPASSER":
             return get_sync("bypass.mode", "external") == "external"
+        if key == "USE_CF_BYPASS":
+            # "off" disables the bypasser entirely (slow pages return 403
+            # untreated — useful if you only rely on fast_download with a
+            # donator key). Otherwise let Shelfmark bypass.
+            return get_sync("bypass.mode", "external") != "off"
         if key == "AA_DONATOR_KEY":
             from grabarr.core.config import load_settings
 

@@ -302,7 +302,7 @@ class AnnaArchiveAdapter:
         await rate_limiter.acquire(self.id, "download")
         try:
             result = await asyncio.to_thread(
-                self._call_get_download, external_id, media_type
+                self._call_download_via_shelfmark, external_id, media_type
             )
         except AdapterError:
             raise
@@ -310,90 +310,84 @@ class AnnaArchiveAdapter:
             raise AdapterServerError(
                 f"{self.id} get_download_info failed: {exc}"
             ) from exc
-        url, size, content_type, filename = result
+        local_path, size, content_type, filename = result
         return DownloadInfo(
-            download_url=url,
+            # Placeholder URL — sync_download sees local_path and skips HTTP.
+            download_url=f"file://{local_path}",
             size_bytes=size,
             content_type=content_type,
             filename_hint=filename,
             extra_headers={},
+            local_path=local_path,
         )
 
-    def _call_get_download(
+    def _call_download_via_shelfmark(
         self, external_id: str, media_type: MediaType
-    ) -> tuple[str, int | None, str | None, str]:
-        """Invoke vendored cascade to resolve an external_id to a URL.
+    ) -> tuple["Path", int | None, str | None, str]:
+        """Run Shelfmark's full ``_download_book`` cascade into a temp file.
 
-        Shelfmark v1.2.1 ``get_book_info(md5)`` returns a ``BrowseRecord``
-        whose ``download_urls: List[str]`` is populated with candidate
-        URLs from every discovered sub-source (aa-fast, aa-slow-*,
-        libgen, welib, zlib, ipfs) — mirror of what Shelfmark's own
-        ``_browse_record_to_release`` does.
-
-        We walk the list, trying to resolve each URL to a direct file.
-        For AA-slow pages we ask Shelfmark's vendored extractor to do
-        the JS/clipboard/span scraping; for libgen/welib/direct URLs
-        we use them as-is.
+        Shelfmark drives the complete pipeline — source-priority ordering
+        (aa-fast → welib → aa-slow tiers → libgen → zlib → ipfs), CF
+        bypass via the configured bypasser, mirror rotation, per-URL
+        failure thresholds, and actual file-content streaming — all in
+        ``_download_book``. Letting it write to a temp path and handing
+        that file back to the orchestrator uses 100 % of the vendored
+        logic instead of trying to reimplement it at the Grabarr side.
         """
-        from grabarr.vendor.shelfmark.release_sources import direct_download
+        from pathlib import Path as _Path
+        import tempfile
 
-        get_book_info = getattr(direct_download, "get_book_info", None)
+        from grabarr.vendor.shelfmark.release_sources.direct_download import (
+            _download_book,
+            get_book_info,
+        )
+
         if not callable(get_book_info):
             raise AdapterError(
                 f"{self.id}: vendored direct_download exposes no get_book_info"
             )
+        book_info = get_book_info(external_id, fetch_download_count=False)
 
-        info = get_book_info(external_id, fetch_download_count=False)
-        urls: list[str] = list(getattr(info, "download_urls", None) or [])
-        if not urls:
-            raise AdapterError(
-                f"{self.id}: vendored get_book_info returned empty download_urls "
-                f"for md5={external_id} (mirrors unreachable, or item is only "
-                "accessible through the login-gated fast-download API — set "
-                "AA_DONATOR_KEY to enable that)"
-            )
+        # BrowseRecord has no ``filename`` — derive from id + format.
+        fmt = (getattr(book_info, "format", "") or "").strip().lower() or "bin"
+        safe_title = (getattr(book_info, "title", "") or external_id).strip()
+        # Keep it short + filesystem-safe; sync_download sanitizes anyway.
+        safe_title = safe_title[:120]
+        filename_hint = f"{safe_title}.{fmt}" if safe_title else f"{external_id}.{fmt}"
+        size_hint = _parse_human_size(getattr(book_info, "size", None))
+        content_type_hint = None
 
-        # Try each candidate URL in order. First one that resolves wins.
-        filename_hint = getattr(info, "filename", None) or external_id
-        size_hint = _parse_human_size(getattr(info, "size", None))
-        content_type_hint = getattr(info, "content_type", None)
-        book_title = getattr(info, "title", "") or ""
-
-        last_error: Exception | None = None
-        for candidate in urls:
-            try:
-                resolved = _resolve_aa_candidate(candidate, direct_download, book_title)
-            except Exception as exc:  # noqa: BLE001
-                last_error = exc
-                _log.info(
-                    "%s candidate resolution failed for %s: %s",
-                    self.id,
-                    candidate[:80],
-                    exc,
-                )
-                continue
-            if not resolved:
-                continue
-            if not _probe_reachable(resolved):
-                _log.info(
-                    "%s resolved URL is unreachable, trying next candidate: %s",
-                    self.id,
-                    resolved[:80],
-                )
-                last_error = ConnectionError(f"unreachable mirror: {resolved}")
-                continue
-            _log.info(
-                "%s resolved candidate: %s → %s",
-                self.id,
-                candidate[:60],
-                resolved[:80],
-            )
-            return (resolved, size_hint, content_type_hint, filename_hint)
-
-        raise AdapterError(
-            f"{self.id}: every candidate URL failed to resolve or was unreachable "
-            f"({len(urls)} tried; last error: {last_error})"
+        # Stage into a private temp dir. sync_download moves the file to
+        # /downloads/ready/<token>/<sanitized-filename> after verification,
+        # so we only need a stable landing spot here.
+        tmp_root = _Path(tempfile.mkdtemp(prefix="grabarr-aa-"))
+        target_path = tmp_root / filename_hint
+        _log.info(
+            "%s delegating to Shelfmark _download_book: md5=%s → %s",
+            self.id, external_id, target_path,
         )
+
+        success_url = _download_book(book_info, target_path)
+        if not success_url or not target_path.exists() or target_path.stat().st_size == 0:
+            # Clean up the empty scratch dir so we don't leak anything.
+            try:
+                if target_path.exists():
+                    target_path.unlink()
+                tmp_root.rmdir()
+            except OSError:
+                pass
+            raise AdapterError(
+                f"{self.id}: Shelfmark cascade exhausted every source for "
+                f"md5={external_id} (see preceding log entries for per-source "
+                "failure reasons — typically CF-bypass unavailable or "
+                "donator-key-only)"
+            )
+
+        _log.info(
+            "%s Shelfmark delivered %s (%d bytes) via %s",
+            self.id, target_path, target_path.stat().st_size, success_url,
+        )
+        return (target_path, size_hint, content_type_hint, filename_hint)
 
     async def health_check(self) -> HealthStatus:
         now = dt.datetime.now(dt.UTC)

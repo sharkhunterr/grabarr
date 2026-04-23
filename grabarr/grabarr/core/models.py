@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Literal
 
 from grabarr.core.enums import AdapterHealth, MediaType, UnhealthyReason
@@ -70,10 +71,17 @@ class SearchResult:
 class DownloadInfo:
     """What ``adapter.get_download_info()`` returns.
 
-    ``download_url`` is the resolved HTTP URL to fetch. For the AA cascade
-    this is populated only after Shelfmark's vendored cascade completes.
-    ``extra_headers`` carries cookies / auth / UA overrides the adapter
-    wants applied to the download request.
+    Two mutually exclusive delivery modes:
+
+    - **URL mode** (default): ``download_url`` is a plain HTTP(S) URL that
+      Grabarr's ``sync_download`` / ``streaming_download`` will fetch with
+      its own httpx client. ``extra_headers`` carries cookies / UA / auth
+      the adapter wants applied to that fetch.
+    - **Local-path mode**: ``local_path`` points at a file the adapter
+      has already fully downloaded (e.g. via Shelfmark's vendored cascade,
+      which handles CF bypass + mirror rotation + retries natively).
+      When set, ``download_url`` should be a ``file://`` placeholder and
+      ``sync_download`` copies the file instead of making an HTTP call.
     """
 
     download_url: str
@@ -81,6 +89,7 @@ class DownloadInfo:
     content_type: str | None
     filename_hint: str
     extra_headers: dict[str, str] = field(default_factory=dict)
+    local_path: Path | None = None
 
 
 @dataclass(frozen=True, slots=True)
