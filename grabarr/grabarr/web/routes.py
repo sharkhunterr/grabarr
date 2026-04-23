@@ -278,6 +278,30 @@ async def profile_prowlarr_setup(slug: str, request: Request) -> HTMLResponse:
     )
 
 
+@router.get("/profiles/{slug}/edit-fragment", response_class=HTMLResponse)
+async def profile_edit_fragment(slug: str, request: Request) -> HTMLResponse:
+    """Just the edit-form inner HTML — used by the modal on /profiles."""
+    from fastapi import HTTPException
+
+    from grabarr.core.enums import MediaType
+    from grabarr.profiles.service import ProfileNotFound, get_profile_by_slug
+
+    try:
+        profile = await get_profile_by_slug(slug)
+    except ProfileNotFound:
+        raise HTTPException(status_code=404, detail=f"profile '{slug}' not found") from None
+    return templates.TemplateResponse(
+        request,
+        "profiles/_edit_form.html",
+        {
+            "profile": profile,
+            "is_new": False,
+            "adapters": get_registered_adapters(),
+            "media_types": [m.value for m in MediaType],
+        },
+    )
+
+
 @router.get("/profiles/{slug}/edit", response_class=HTMLResponse)
 async def profile_edit(slug: str, request: Request) -> HTMLResponse:
     """Edit form for an existing profile."""

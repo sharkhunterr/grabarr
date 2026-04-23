@@ -1,311 +1,184 @@
 {% extends "_base.html" %}
-{% block title %}Edit {{ profile.name }} · Grabarr{% endblock %}
+{% block title %}{{ "New profile" if is_new else profile.name }} · Grabarr{% endblock %}
 
 {% block content %}
-<script src="https://unpkg.com/htmx.org@2.0.3/dist/htmx.min.js" defer></script>
-<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js" defer></script>
-
-<div class="mb-4">
-  <a href="/profiles" class="text-sm text-indigo-600 hover:underline dark:text-indigo-400">&larr; Back to profiles</a>
+<div class="mb-6">
+  <a href="/profiles" class="text-sm text-brand-600 hover:underline dark:text-brand-400">← Back to profiles</a>
 </div>
 
-<div class="flex items-center justify-between mb-6">
+<div class="flex flex-wrap items-start justify-between gap-3 mb-6">
   <div>
-    <h1 class="text-2xl font-bold">{{ "New profile" if is_new else "Edit " + profile.name }}</h1>
-    <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-      Changes apply immediately — no restart required.
-    </p>
+    <h1 class="page-title">{{ "New profile" if is_new else "Edit " + profile.name }}</h1>
+    <p class="page-subtitle">Changes apply immediately — no restart required.</p>
   </div>
-  {% if not is_new and not profile.is_default %}
-  <button class="btn-danger" onclick="deleteProfileModal()">Delete</button>
-  {% endif %}
-</div>
-
-<script>
-  const _profileSlug = "{{ profile.slug }}";
-  async function deleteProfileModal() {
-    const ok = await confirmModal({
-      title: 'Delete profile?',
-      body: 'This cannot be undone. Prowlarr indexers pointing here will stop working.',
-      confirmLabel: 'Delete',
-      danger: true,
-    });
-    if (!ok) return;
-    const r = await fetch(`/api/profiles/${_profileSlug}`, {method: 'DELETE'});
-    if (!r.ok) { toast('Delete failed: ' + await r.text(), 'err', 5000); return; }
-    toast('Profile deleted', 'ok');
-    setTimeout(() => { window.location.href = '/profiles'; }, 400);
-  }
-</script>
-
-<form id="profile-form" class="space-y-6" onsubmit="return saveProfile(event)">
-  <div class="card grid gap-4 md:grid-cols-2">
-    <div>
-      <label class="label" for="p-slug">Slug (URL-safe, immutable)</label>
-      <input id="p-slug" name="slug" class="input font-mono"
-             value="{{ profile.slug }}" {% if not is_new %}readonly disabled{% endif %}
-             pattern="[a-z0-9][a-z0-9_-]{1,63}" required>
-    </div>
-    <div>
-      <label class="label" for="p-name">Name</label>
-      <input id="p-name" name="name" class="input" value="{{ profile.name }}" required>
-    </div>
-    <div class="md:col-span-2">
-      <label class="label" for="p-description">Description</label>
-      <input id="p-description" name="description" class="input"
-             value="{{ profile.description or '' }}">
-    </div>
-    <div>
-      <label class="label" for="p-media_type">Media type</label>
-      <select id="p-media_type" name="media_type" class="input">
-        {% for mt in media_types %}
-          <option value="{{ mt }}" {% if profile.media_type == mt %}selected{% endif %}>{{ mt }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div>
-      <label class="label" for="p-mode">Orchestrator mode</label>
-      <select id="p-mode" name="mode" class="input">
-        <option value="first_match" {% if profile.mode == 'first_match' %}selected{% endif %}>first_match</option>
-        <option value="aggregate_all" {% if profile.mode == 'aggregate_all' %}selected{% endif %}>aggregate_all</option>
-      </select>
-    </div>
-    <div>
-      <label class="label" for="p-download_mode">Download mode override</label>
-      <select id="p-download_mode" name="download_mode_override" class="input">
-        <option value="">(use global default)</option>
-        <option value="sync" {% if profile.download_mode_override == 'sync' %}selected{% endif %}>sync</option>
-        <option value="async_streaming" {% if profile.download_mode_override == 'async_streaming' %}selected{% endif %}>async_streaming</option>
-        <option value="hybrid" {% if profile.download_mode_override == 'hybrid' %}selected{% endif %}>hybrid</option>
-      </select>
-    </div>
-    <div>
-      <label class="label" for="p-torrent_mode">Torrent mode override</label>
-      <select id="p-torrent_mode" name="torrent_mode_override" class="input">
-        <option value="">(use global default)</option>
-        <option value="active_seed" {% if profile.torrent_mode_override == 'active_seed' %}selected{% endif %}>active_seed</option>
-        <option value="webseed" {% if profile.torrent_mode_override == 'webseed' %}selected{% endif %}>webseed</option>
-      </select>
-    </div>
-    <div class="md:col-span-2">
-      <label class="label" for="p-categories">Newznab categories (comma-separated ints)</label>
-      <input id="p-categories" name="newznab_categories" class="input font-mono"
-             value="{{ profile.newznab_categories|join(',') }}">
-    </div>
-    <div class="md:col-span-2">
-      <label class="inline-flex items-center gap-2 cursor-pointer select-none">
-        <input type="checkbox" name="enabled" class="h-4 w-4"
-               {% if profile.enabled %}checked{% endif %}>
-        <span class="text-sm">Enabled</span>
-      </label>
-    </div>
-  </div>
-
-  <div class="card">
-    <h2 class="text-lg font-semibold mb-3">Sources (drag to reorder)</h2>
-    <ul id="source-list" class="space-y-2">
-      {% for entry in profile.sources %}
-        <li class="flex items-center gap-3 rounded border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900 cursor-move">
-          <span class="text-gray-400">≡</span>
-          <input type="hidden" name="source_id" value="{{ entry.source_id }}">
-          <span class="flex-1 font-medium">{{ entry.source_id }}</span>
-          <label class="text-xs text-gray-500 dark:text-gray-400">weight
-            <input type="number" step="0.1" min="0.1" max="2.0" name="weight"
-                   value="{{ entry.weight }}" class="ml-1 w-20 rounded border-gray-300 px-1 py-0.5 text-xs dark:border-gray-700 dark:bg-gray-800">
-          </label>
-          <label class="text-xs text-gray-500 dark:text-gray-400">timeout
-            <input type="number" min="1" max="600" name="timeout_seconds"
-                   value="{{ entry.timeout_seconds }}" class="ml-1 w-20 rounded border-gray-300 px-1 py-0.5 text-xs dark:border-gray-700 dark:bg-gray-800">
-          </label>
-          <label class="inline-flex items-center gap-1 text-xs cursor-pointer">
-            <input type="checkbox" name="enabled" {% if entry.enabled %}checked{% endif %}>
-            <span class="text-gray-500 dark:text-gray-400">enabled</span>
-          </label>
-          <button type="button" class="text-xs text-red-600 hover:underline"
-                  onclick="this.parentElement.remove()">remove</button>
-        </li>
-      {% endfor %}
-    </ul>
-    <div class="mt-3 flex gap-2">
-      <select id="add-source-id" class="input w-auto">
-        {% for aid, cls in adapters.items() | sort %}
-          <option value="{{ aid }}">{{ cls.display_name }} ({{ aid }})</option>
-        {% endfor %}
-      </select>
-      <button type="button" class="btn-secondary" onclick="addSource()">Add source</button>
-    </div>
-  </div>
-
-  <div class="card">
-    <h2 class="text-lg font-semibold mb-3">Filters</h2>
-    <div class="grid gap-3 md:grid-cols-2">
-      <div>
-        <label class="label">Languages (ISO-639-1, comma-separated)</label>
-        <input name="languages" class="input" value="{{ profile.filters.get('languages', []) | join(',') }}" placeholder="en,fr,de">
-      </div>
-      <div>
-        <label class="label">Preferred formats</label>
-        <input name="preferred_formats" class="input" value="{{ profile.filters.get('preferred_formats', []) | join(',') }}" placeholder="epub,mobi,pdf">
-      </div>
-      <div>
-        <label class="label">Min year</label>
-        <input type="number" name="min_year" class="input" value="{{ profile.filters.get('min_year') or '' }}">
-      </div>
-      <div>
-        <label class="label">Max year</label>
-        <input type="number" name="max_year" class="input" value="{{ profile.filters.get('max_year') or '' }}">
-      </div>
-      <div class="md:col-span-2">
-        <label class="label">Extra query terms</label>
-        <input name="extra_query_terms" class="input" value="{{ profile.filters.get('extra_query_terms') or '' }}">
-      </div>
-    </div>
-  </div>
-
-  <div class="flex gap-3">
-    <button type="submit" class="btn-primary">Save</button>
-    {% if not is_new %}
-    <button type="button" class="btn-secondary"
-            hx-post="/api/profiles/{{ profile.slug }}/test"
-            hx-ext="json-enc"
-            hx-vals='js:{query: document.getElementById("test-query").value, limit: 10}'
-            hx-target="#test-results"
-            hx-swap="innerHTML">
-      Run Test
-    </button>
-    <input id="test-query" type="search" class="input max-w-sm"
-           placeholder="search query (e.g. foundation)">
+  <div class="flex flex-wrap gap-2">
+    {% if not is_new and not profile.is_default %}
+    <button class="btn-danger" onclick="deleteProfileConfirm()">Delete</button>
     {% endif %}
     <a href="/profiles" class="btn-ghost">Cancel</a>
+    <button type="button" class="btn-primary" onclick="saveProfile()">Save</button>
   </div>
-</form>
+</div>
 
-<div id="test-results" class="mt-6"></div>
+{% include "profiles/_edit_form.html" %}
 
-{% raw %}
+<div class="mt-6 flex flex-wrap gap-2">
+  {% if not is_new and not profile.is_default %}
+  <button class="btn-danger" onclick="deleteProfileConfirm()">Delete</button>
+  {% endif %}
+  <a href="/profiles" class="btn-ghost">Cancel</a>
+  <button type="button" class="btn-primary ml-auto" onclick="saveProfile()">Save</button>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js" defer></script>
 <script>
-  // Drag-and-drop reorder for sources.
-  document.addEventListener('DOMContentLoaded', () => {
+  const _profile = {
+    slug: "{{ profile.slug }}",
+    isNew: {{ 'true' if is_new else 'false' }},
+  };
+
+  function initSources() {
     const list = document.getElementById('source-list');
     if (list && window.Sortable) {
-      new Sortable(list, { handle: 'span', animation: 150 });
+      new Sortable(list, { handle: 'span:first-child', animation: 150 });
     }
-  });
+  }
+  window.addEventListener('DOMContentLoaded', initSources);
 
   function addSource() {
-    const sel = document.getElementById('add-source-id');
-    const src = sel.value;
+    const src = document.getElementById('add-source-id').value;
     const li = document.createElement('li');
-    li.className = 'flex items-center gap-3 rounded border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900 cursor-move';
+    li.className = 'flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-800 dark:bg-gray-950 cursor-move';
     li.innerHTML = `
-      <span class="text-gray-400">≡</span>
-      <input type="hidden" name="source_id" value="${src}">
+      <span class="text-gray-400 select-none">⋮⋮</span>
+      <input type="hidden" data-source-id value="${src}">
       <span class="flex-1 font-medium">${src}</span>
       <label class="text-xs text-gray-500 dark:text-gray-400">weight
-        <input type="number" step="0.1" min="0.1" max="2.0" name="weight" value="1.0" class="ml-1 w-20 rounded border-gray-300 px-1 py-0.5 text-xs dark:border-gray-700 dark:bg-gray-800">
+        <input type="number" step="0.1" min="0.1" max="2.0" data-weight value="1.0" class="ml-1 !w-20 !py-1 text-xs">
       </label>
       <label class="text-xs text-gray-500 dark:text-gray-400">timeout
-        <input type="number" min="1" max="600" name="timeout_seconds" value="60" class="ml-1 w-20 rounded border-gray-300 px-1 py-0.5 text-xs dark:border-gray-700 dark:bg-gray-800">
+        <input type="number" min="1" max="600" data-timeout value="60" class="ml-1 !w-20 !py-1 text-xs">
       </label>
       <label class="inline-flex items-center gap-1 text-xs cursor-pointer">
-        <input type="checkbox" name="enabled" checked>
+        <input type="checkbox" data-enabled checked>
         <span class="text-gray-500 dark:text-gray-400">enabled</span>
       </label>
-      <button type="button" class="text-xs text-red-600 hover:underline" onclick="this.parentElement.remove()">remove</button>
+      <button type="button" class="btn-ghost btn-sm text-red-600" onclick="this.closest('li').remove()">×</button>
     `;
     document.getElementById('source-list').appendChild(li);
   }
 
   function collectSources() {
-    const rows = document.querySelectorAll('#source-list > li');
-    return Array.from(rows).map(li => ({
-      source_id: li.querySelector('input[name=source_id]').value,
-      weight: parseFloat(li.querySelector('input[name=weight]').value),
-      timeout_seconds: parseInt(li.querySelector('input[name=timeout_seconds]').value),
-      enabled: li.querySelector('input[name=enabled]').checked,
+    return Array.from(document.querySelectorAll('#source-list > li')).map(li => ({
+      source_id: li.querySelector('[data-source-id]').value,
+      weight: parseFloat(li.querySelector('[data-weight]').value) || 1.0,
+      timeout_seconds: parseInt(li.querySelector('[data-timeout]').value) || 60,
+      enabled: li.querySelector('[data-enabled]').checked,
       skip_if_member_required: false,
     }));
   }
 
-  // Query form fields DIRECTLY instead of via FormData so we never
-  // get confused by duplicate `name=` attributes in the source list
-  // (enabled, weight, etc. appear both in sources and in the top-level
-  // profile section).
-  function fieldValue(selector) {
-    const el = document.querySelector(selector);
-    return el ? el.value : '';
-  }
-  function fieldChecked(selector) {
-    const el = document.querySelector(selector);
-    return el ? el.checked : false;
-  }
   function splitCsv(s) {
     return (s || '').split(',').map(x => x.trim()).filter(Boolean);
   }
 
-  async function saveProfile(e) {
-    e.preventDefault();
-
+  function buildBody() {
+    const val = id => (document.getElementById(id) || {}).value || '';
+    const chk = id => (document.getElementById(id) || {}).checked || false;
     const body = {
-      name: fieldValue('#p-name'),
-      description: fieldValue('#p-description') || null,
-      media_type: fieldValue('#p-media_type'),
-      mode: fieldValue('#p-mode'),
-      newznab_categories: splitCsv(fieldValue('#p-categories')).map(Number),
-      download_mode_override: fieldValue('#p-download_mode') || null,
-      torrent_mode_override: fieldValue('#p-torrent_mode') || null,
-      enabled: fieldChecked('input[name="enabled"]:not(#source-list input)') ||
-               fieldChecked('form#profile-form > .card input[name="enabled"]'),
+      name: val('p-name'),
+      description: val('p-description') || null,
+      media_type: val('p-media_type'),
+      mode: val('p-mode'),
+      newznab_categories: splitCsv(val('p-categories')).map(Number).filter(n => !Number.isNaN(n)),
+      download_mode_override: val('p-download_mode') || null,
+      torrent_mode_override: val('p-torrent_mode') || null,
+      enabled: chk('p-enabled'),
       sources: collectSources(),
       filters: {
-        languages: splitCsv(fieldValue('input[name="languages"]')),
-        preferred_formats: splitCsv(fieldValue('input[name="preferred_formats"]')),
-        min_year: parseInt(fieldValue('input[name="min_year"]')) || null,
-        max_year: parseInt(fieldValue('input[name="max_year"]')) || null,
+        languages: splitCsv(val('f-languages')),
+        preferred_formats: splitCsv(val('f-formats')),
+        min_year: val('f-min-year') ? parseInt(val('f-min-year')) : null,
+        max_year: val('f-max-year') ? parseInt(val('f-max-year')) : null,
         min_size_mb: null,
         max_size_mb: null,
         require_isbn: false,
-        extra_query_terms: fieldValue('input[name="extra_query_terms"]') || '',
-      }
+        extra_query_terms: val('f-extra'),
+      },
     };
+    if (_profile.isNew) body.slug = val('p-slug');
+    return body;
+  }
 
-    const isNew = {{ 'true' if is_new else 'false' }};
-    let url, method;
-    if (isNew) {
-      body.slug = fieldValue('#p-slug');
-      url = '/api/profiles';
-      method = 'POST';
-    } else {
-      url = '/api/profiles/{{ profile.slug }}';
-      method = 'PATCH';
-    }
-
-    console.log('[grabarr] PATCH body:', body);
+  async function saveProfile() {
+    const body = buildBody();
+    console.log('[grabarr] save body:', body);
+    const url = _profile.isNew ? '/api/profiles' : `/api/profiles/${_profile.slug}`;
+    const method = _profile.isNew ? 'POST' : 'PATCH';
     const r = await fetch(url, {
-      method, headers: {'Content-Type': 'application/json'},
+      method,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
     if (!r.ok) {
-      toast('Save failed: ' + await r.text(), 'err', 5000);
-      return false;
+      toast('Save failed: ' + await r.text(), 'err', 6000);
+      return;
     }
-    // Reload THIS page so you can verify every field persisted.
-    // Old behaviour (redirect to /profiles) made it impossible to
-    // confirm which fields actually saved.
     const saved = await r.json();
-    const slug = isNew ? saved.slug : '{{ profile.slug }}';
-    window.location.href = `/profiles/${slug}/edit?saved=1`;
-    return false;
+    toast('✓ Saved', 'ok');
+    const slug = _profile.isNew ? saved.slug : _profile.slug;
+    setTimeout(() => { window.location.href = `/profiles/${slug}/edit?saved=1`; }, 500);
+  }
+
+  async function deleteProfileConfirm() {
+    const ok = await confirmModal({
+      title: 'Delete profile?',
+      body: `<code>${_profile.slug}</code> will be removed permanently. Prowlarr indexers pointing here will stop working.`,
+      confirmLabel: 'Delete',
+      danger: true,
+    });
+    if (!ok) return;
+    const r = await fetch(`/api/profiles/${_profile.slug}`, { method: 'DELETE' });
+    if (!r.ok) { toast('Delete failed: ' + await r.text(), 'err', 6000); return; }
+    toast('Deleted', 'ok');
+    setTimeout(() => { window.location.href = '/profiles'; }, 400);
+  }
+
+  async function runTest() {
+    const q = document.getElementById('test-query').value.trim();
+    if (!q) { toast('Enter a query first', 'warn'); return; }
+    const box = document.getElementById('test-results');
+    box.innerHTML = '<div class="text-xs text-gray-500">Running…</div>';
+    const r = await fetch(`/api/profiles/${_profile.slug}/test`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({query: q, limit: 10}),
+    });
+    if (!r.ok) { box.innerHTML = '<div class="text-red-600 text-xs">' + await r.text() + '</div>'; return; }
+    const data = await r.json();
+    const rows = (data.results || []).map(it => `
+      <tr class="border-t border-gray-100 dark:border-gray-800">
+        <td class="py-1 pr-3">${it.title}</td>
+        <td class="py-1 pr-3 text-xs">${it.source_id}</td>
+        <td class="py-1 pr-3 text-xs">${it.format || ''}</td>
+        <td class="py-1 pr-3 text-xs">${it.year || '—'}</td>
+        <td class="py-1 pr-3 text-xs text-right">${it.quality_score}</td>
+      </tr>`).join('');
+    box.innerHTML = `
+      <div class="text-xs text-gray-500 dark:text-gray-400 mb-2">${data.results.length} results · took ${data.took_ms} ms</div>
+      <div class="overflow-x-auto"><table class="w-full text-sm">
+        <thead class="text-left text-xs uppercase text-gray-500 dark:text-gray-400">
+          <tr><th class="pb-1 pr-3">Title</th><th class="pb-1 pr-3">Source</th><th class="pb-1 pr-3">Format</th><th class="pb-1 pr-3">Year</th><th class="pb-1 pr-3 text-right">Score</th></tr>
+        </thead>
+        <tbody>${rows || '<tr><td colspan=5 class="py-2 text-gray-500">No results</td></tr>'}</tbody>
+      </table></div>`;
   }
 
   // Show a toast when ?saved=1 is in the URL.
   if (new URLSearchParams(window.location.search).get('saved') === '1') {
-    const div = document.createElement('div');
-    div.className = 'fixed bottom-4 right-4 z-50 rounded-md bg-green-600 text-white px-4 py-3 shadow-lg';
-    div.textContent = '✓ Saved';
-    document.body.appendChild(div);
-    setTimeout(() => div.remove(), 2500);
+    window.addEventListener('DOMContentLoaded', () => toast('✓ Saved', 'ok'));
   }
 </script>
-{% endraw %}
 {% endblock %}

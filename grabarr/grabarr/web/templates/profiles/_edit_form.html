@@ -1,0 +1,162 @@
+{# Re-usable edit-form fragment.
+   Rendered inside the modal opened from /profiles, AND inside the full
+   /profiles/{slug}/edit page for deep-links / back-button navigation.
+   Expected context: profile, is_new, adapters, media_types. #}
+
+<form id="profile-form" class="space-y-6">
+  <!-- General -->
+  <div class="card">
+    <div class="card-body space-y-4">
+      <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">General</h3>
+      <div class="grid gap-4 md:grid-cols-2">
+        <div>
+          <label class="label" for="p-slug">Slug</label>
+          <input id="p-slug" class="w-full font-mono"
+                 value="{{ profile.slug }}" {% if not is_new %}readonly disabled{% endif %}
+                 pattern="[a-z0-9][a-z0-9_-]{1,63}" required>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Lowercase, digits, _ or − only. Immutable after creation.</p>
+        </div>
+        <div>
+          <label class="label" for="p-name">Name</label>
+          <input id="p-name" class="w-full" value="{{ profile.name }}" required>
+        </div>
+        <div class="md:col-span-2">
+          <label class="label" for="p-description">Description</label>
+          <input id="p-description" class="w-full" value="{{ profile.description or '' }}">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Routing -->
+  <div class="card">
+    <div class="card-body space-y-4">
+      <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Routing</h3>
+      <div class="grid gap-4 md:grid-cols-2">
+        <div>
+          <label class="label" for="p-media_type">Media type</label>
+          <select id="p-media_type" class="w-full">
+            {% for mt in media_types %}
+              <option value="{{ mt }}" {% if profile.media_type == mt %}selected{% endif %}>{{ mt }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="label" for="p-mode">Mode</label>
+          <select id="p-mode" class="w-full">
+            <option value="first_match" {% if profile.mode == 'first_match' %}selected{% endif %}>first_match (stop on first source with results)</option>
+            <option value="aggregate_all" {% if profile.mode == 'aggregate_all' %}selected{% endif %}>aggregate_all (query every source in parallel)</option>
+          </select>
+        </div>
+        <div>
+          <label class="label" for="p-download_mode">Download override</label>
+          <select id="p-download_mode" class="w-full">
+            <option value="">— use global —</option>
+            <option value="sync" {% if profile.download_mode_override == 'sync' %}selected{% endif %}>sync</option>
+            <option value="async_streaming" {% if profile.download_mode_override == 'async_streaming' %}selected{% endif %}>async_streaming</option>
+            <option value="hybrid" {% if profile.download_mode_override == 'hybrid' %}selected{% endif %}>hybrid</option>
+          </select>
+        </div>
+        <div>
+          <label class="label" for="p-torrent_mode">Torrent override</label>
+          <select id="p-torrent_mode" class="w-full">
+            <option value="">— use global —</option>
+            <option value="active_seed" {% if profile.torrent_mode_override == 'active_seed' %}selected{% endif %}>active_seed</option>
+            <option value="webseed" {% if profile.torrent_mode_override == 'webseed' %}selected{% endif %}>webseed</option>
+          </select>
+        </div>
+        <div class="md:col-span-2">
+          <label class="label" for="p-categories">Newznab categories</label>
+          <input id="p-categories" class="w-full font-mono" value="{{ profile.newznab_categories | join(',') }}" placeholder="7020, 7030">
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Comma-separated integer codes (e.g. 7020 for ebooks, 3030 for audiobooks).</p>
+        </div>
+        <div class="md:col-span-2">
+          <label class="inline-flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" id="p-enabled" {% if profile.enabled %}checked{% endif %}>
+            <span class="text-sm">Enabled</span>
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sources -->
+  <div class="card">
+    <div class="card-body space-y-4">
+      <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Sources (drag to reorder)</h3>
+      <ul id="source-list" class="space-y-2">
+        {% for entry in profile.sources %}
+        <li class="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-800 dark:bg-gray-950 cursor-move">
+          <span class="text-gray-400 select-none">⋮⋮</span>
+          <input type="hidden" data-source-id value="{{ entry.source_id }}">
+          <span class="flex-1 font-medium">{{ entry.source_id }}</span>
+          <label class="text-xs text-gray-500 dark:text-gray-400">weight
+            <input type="number" step="0.1" min="0.1" max="2.0" data-weight value="{{ entry.weight }}" class="ml-1 !w-20 !py-1 text-xs">
+          </label>
+          <label class="text-xs text-gray-500 dark:text-gray-400">timeout
+            <input type="number" min="1" max="600" data-timeout value="{{ entry.timeout_seconds }}" class="ml-1 !w-20 !py-1 text-xs">
+          </label>
+          <label class="inline-flex items-center gap-1 text-xs cursor-pointer">
+            <input type="checkbox" data-enabled {% if entry.enabled %}checked{% endif %}>
+            <span class="text-gray-500 dark:text-gray-400">enabled</span>
+          </label>
+          <button type="button" class="btn-ghost btn-sm text-red-600"
+                  onclick="this.closest('li').remove()">×</button>
+        </li>
+        {% endfor %}
+      </ul>
+      <div class="flex flex-wrap gap-2 pt-2">
+        <select id="add-source-id" class="flex-1 min-w-[180px]">
+          {% for aid, cls in adapters.items() | sort %}
+            <option value="{{ aid }}">{{ cls.display_name }} ({{ aid }})</option>
+          {% endfor %}
+        </select>
+        <button type="button" class="btn-secondary" onclick="addSource()">+ Add source</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="card">
+    <div class="card-body space-y-4">
+      <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Filters</h3>
+      <div class="grid gap-4 md:grid-cols-2">
+        <div>
+          <label class="label" for="f-languages">Languages (ISO 639-1)</label>
+          <input id="f-languages" class="w-full" value="{{ profile.filters.get('languages', []) | join(',') }}" placeholder="en,fr,de">
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Comma-separated. Empty = any language.</p>
+        </div>
+        <div>
+          <label class="label" for="f-formats">Preferred formats</label>
+          <input id="f-formats" class="w-full" value="{{ profile.filters.get('preferred_formats', []) | join(',') }}" placeholder="epub,mobi,pdf">
+        </div>
+        <div>
+          <label class="label" for="f-min-year">Min year</label>
+          <input id="f-min-year" type="number" class="w-full" value="{{ profile.filters.get('min_year') or '' }}">
+        </div>
+        <div>
+          <label class="label" for="f-max-year">Max year</label>
+          <input id="f-max-year" type="number" class="w-full" value="{{ profile.filters.get('max_year') or '' }}">
+        </div>
+        <div class="md:col-span-2">
+          <label class="label" for="f-extra">Extra query terms</label>
+          <input id="f-extra" class="w-full" value="{{ profile.filters.get('extra_query_terms') or '' }}">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Inline test -->
+  {% if not is_new %}
+  <div class="card">
+    <div class="card-body space-y-3">
+      <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Run test search</h3>
+      <div class="flex flex-wrap gap-2">
+        <input id="test-query" type="search" class="flex-1 min-w-[240px]" placeholder="e.g. foundation asimov">
+        <button type="button" class="btn-secondary" onclick="runTest()">Run</button>
+      </div>
+      <div id="test-results" class="text-sm"></div>
+    </div>
+  </div>
+  {% endif %}
+</form>
