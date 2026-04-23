@@ -28,6 +28,8 @@ from grabarr import __version__
 from grabarr.api.admin import router as admin_router
 from grabarr.api.health import router as health_router
 from grabarr.api.torznab import router as torznab_router
+from grabarr.torrents.tracker import router as tracker_router
+from grabarr.web.routes import mount_static, router as web_router
 from grabarr.core.config import install_shelfmark_bridge, load_settings
 from grabarr.core.logging import configure_root, setup_logger
 from grabarr.db.session import close_engine, session_scope
@@ -146,6 +148,9 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(admin_router)
     app.include_router(torznab_router)
+    app.include_router(tracker_router)
+    app.include_router(web_router)
+    mount_static(app)
     return app
 
 

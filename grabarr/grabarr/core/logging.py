@@ -104,20 +104,25 @@ def _redact_obj(obj: Any) -> Any:
 
 
 class RedactionFilter(logging.Filter):
-    """Redact known-secret patterns in the final formatted message."""
+    """Redact known-secret patterns in the final formatted message.
+
+    Strategy: if ``record.args`` is non-empty, we MUST preserve the ``%s``
+    placeholder count in ``record.msg`` — rewriting placeholders causes
+    TypeError: not all arguments converted. So we redact only the args
+    (which are what contain the actual secrets). When there are no args,
+    the msg is already-rendered text and we redact that directly.
+    """
 
     def filter(self, record: logging.LogRecord) -> bool:
-        # Redact positional args first (they may end up in the formatted msg).
         if record.args:
+            # Args-path: redact args only; leave msg (with %s placeholders) alone.
             if isinstance(record.args, dict):
                 record.args = _redact_obj(record.args)
             elif isinstance(record.args, tuple):
                 record.args = tuple(_redact_obj(a) for a in record.args)
-
-        # And the message body itself, in case it's already-rendered text.
-        if isinstance(record.msg, str):
+        elif isinstance(record.msg, str):
+            # No args: redact the rendered message directly.
             record.msg = _redact_string(record.msg)
-
         return True
 
 

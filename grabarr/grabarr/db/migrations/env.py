@@ -34,6 +34,19 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
+# Honour GRABARR_* env vars so tests + Docker can override data_dir without
+# editing alembic.ini. The alembic.ini value is the fallback.
+from grabarr.core.config import get_settings  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+_settings = get_settings()
+_data_dir = Path(_settings.server.data_dir)
+_data_dir.mkdir(parents=True, exist_ok=True)
+config.set_main_option(
+    "sqlalchemy.url",
+    f"sqlite+aiosqlite:///{_data_dir}/grabarr.db",
+)
+
 target_metadata = Base.metadata
 
 

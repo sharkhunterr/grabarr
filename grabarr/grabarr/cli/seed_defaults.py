@@ -63,11 +63,10 @@ async def seed_defaults() -> list[str]:
                 )
             )
             inserted.append(row["slug"])
-            _log.info(
-                "seeded default profile slug=%s api_key=%s (one-time reveal)",
-                row["slug"],
-                plaintext,
-            )
+            # API key is NOT logged. Operators reveal it via the Copy
+            # Prowlarr Config UI action or POST /api/profiles/{slug}/
+            # regenerate-key (Constitution Article XIII: no secrets in logs).
+            _log.info("seeded default profile slug=%s", row["slug"])
     return inserted
 
 

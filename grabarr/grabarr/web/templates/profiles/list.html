@@ -1,0 +1,69 @@
+{% extends "_base.html" %}
+{% block title %}Profiles · Grabarr{% endblock %}
+
+{% block content %}
+<div class="mb-6 flex items-center justify-between">
+  <div>
+    <h1 class="text-2xl font-bold">Profiles</h1>
+    <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+      Each profile is its own Torznab endpoint. Copy the config JSON into Prowlarr's Generic Torznab indexer.
+    </p>
+  </div>
+</div>
+
+<div class="grid gap-4 md:grid-cols-2">
+  {% for p in profiles %}
+  <div class="card flex flex-col">
+    <div class="flex items-start justify-between">
+      <div>
+        <h2 class="text-lg font-semibold">{{ p.name }}</h2>
+        <div class="mt-1 flex items-center gap-2">
+          <span class="badge-neutral">{{ p.media_type }}</span>
+          <span class="badge-neutral">{{ p.mode }}</span>
+          {% if p.is_default %}
+            <span class="badge-success">default</span>
+          {% endif %}
+          {% if p.enabled %}
+            <span class="badge-success">enabled</span>
+          {% else %}
+            <span class="badge-warning">disabled</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    {% if p.description %}
+      <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">{{ p.description }}</p>
+    {% endif %}
+
+    <div class="mt-3 text-sm">
+      <div class="text-gray-500 dark:text-gray-400">Sources (ordered):</div>
+      <ul class="mt-1 flex flex-wrap gap-1">
+        {% for s in p.sources %}
+          <li class="badge-neutral" title="weight {{ s.weight }}">{{ s.source_id }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <div class="mt-3 text-sm">
+      <div class="text-gray-500 dark:text-gray-400">Torznab URL</div>
+      <code class="mt-1 block overflow-x-auto rounded bg-gray-100 px-2 py-1 font-mono text-xs dark:bg-gray-800">{{ base_url }}/torznab/{{ p.slug }}/api</code>
+    </div>
+
+    <div class="mt-auto flex gap-2 pt-4">
+      <a href="/api/prowlarr-config?profile={{ p.slug }}"
+         class="btn-primary flex-1"
+         download="grabarr-{{ p.slug }}.json">
+        Copy Prowlarr Config
+      </a>
+      <button type="button"
+              class="btn-secondary"
+              data-url="{{ base_url }}/torznab/{{ p.slug }}/api"
+              onclick="navigator.clipboard.writeText(this.dataset.url);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy URL',1500)">
+        Copy URL
+      </button>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

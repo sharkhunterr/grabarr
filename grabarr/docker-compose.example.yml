@@ -1,0 +1,53 @@
+# Grabarr — example docker-compose.
+#
+# Copy to docker-compose.yml, edit the volume host paths + env vars for your
+# setup, then `docker compose up -d`.
+
+services:
+  grabarr:
+    build: .
+    image: grabarr:1.0.0
+    container_name: grabarr
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config:/config              # config.yaml lives here
+      - ./data:/data                  # SQLite DB + future libtorrent session state
+      - ./downloads:/downloads        # incoming/ + ready/ file staging
+    environment:
+      # Logging: "text" for humans, "json" for log aggregators
+      GRABARR_LOG_LEVEL: "INFO"
+      LOG_FORMAT: "text"
+      # Bypass wiring
+      GRABARR_SHELFMARK_EXT_BYPASSER_URL: "http://flaresolverr:8191/v1"
+      GRABARR_SHELFMARK_USING_EXTERNAL_BYPASSER: "true"
+      # Optional: Anna's Archive donator key (uncomment and fill)
+      # GRABARR_SOURCES__ANNA_ARCHIVE__MEMBER_KEY: "your-aa-key"
+      # Optional: Z-Library cookies (uncomment and fill)
+      # GRABARR_SOURCES__ZLIBRARY__REMIX_USERID: "..."
+      # GRABARR_SOURCES__ZLIBRARY__REMIX_USERKEY: "..."
+      # Internet Archive contact email (REQUIRED by IA policy)
+      GRABARR_IA_CONTACT_EMAIL: "you@example.com"
+    networks:
+      - grabarr_net
+    depends_on:
+      - flaresolverr
+
+  flaresolverr:
+    # Shelfmark's vendored external_bypasser targets FlareSolverr v3.x.
+    image: ghcr.io/flaresolverr/flaresolverr:v3.3.25
+    container_name: flaresolverr
+    restart: unless-stopped
+    environment:
+      LOG_LEVEL: "info"
+      CAPTCHA_SOLVER: "none"
+      TZ: "UTC"
+    networks:
+      - grabarr_net
+    # FlareSolverr is called over the internal Docker network only; no
+    # ports: exposed on the host — keeps the attack surface minimal.
+
+networks:
+  grabarr_net:
+    driver: bridge

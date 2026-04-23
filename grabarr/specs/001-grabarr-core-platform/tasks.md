@@ -134,20 +134,20 @@ Single-project Python layout under the repository root; package is `grabarr/`, t
 
 ### Bypass service
 
-- [ ] T061 [US1] Create `grabarr/bypass/__init__.py` and `grabarr/bypass/service.py` — `BypassService` with mode dispatch (`external` default) delegating to the vendored `external_bypasser.py`; ignores `internal` and `auto` (filled in US4).
-- [ ] T062 [US1] Create `grabarr/bypass/cache.py` — persisted `bypass_sessions` cache per research R-5, with `get(domain)` / `set(domain, cookie, ua)` / `invalidate(domain)` methods.
+- [X] T061 [US1] Create `grabarr/bypass/__init__.py` and `grabarr/bypass/service.py` — `BypassService` with mode dispatch (`external` default) delegating to the vendored `external_bypasser.py`; ignores `internal` and `auto` (filled in US4).
+- [X] T062 [US1] Create `grabarr/bypass/cache.py` — persisted `bypass_sessions` cache per research R-5, with `get(domain)` / `set(domain, cookie, ua)` / `invalidate(domain)` methods.
 
 ### Profiles, orchestrator, search-cache
 
 - [X] T063 [US1] Create `grabarr/profiles/service.py` — CRUD methods (`list`, `get_by_slug`, `create`, `update`, `delete` with `is_default` guard, `regenerate_api_key`, `duplicate`); bcrypt hashing for API keys; cache invalidation on mutation.
 - [X] T064 [US1] Create `grabarr/profiles/orchestrator.py` — `SearchOrchestrator.search(profile, query, filters)`, implementing `first_match` mode (aggregate_all deferred to US3), per-entry timeout, weight multiplier applied to `quality_score`, dedup by `(normalized_title, author, year, format)`.
-- [ ] T065 [US1] Create `grabarr/profiles/cache.py` — 15-minute TTL search cache keyed by `sha256(normalized_query | profile_slug | filters_hash)` backed by `search_cache` table.
+- [X] T065 [US1] Create `grabarr/profiles/cache.py` — 15-minute TTL search cache keyed by `sha256(normalized_query | profile_slug | filters_hash)` backed by `search_cache` table.
 
 ### Torznab endpoint
 
 - [X] T066 [US1] Create `grabarr/api/torznab.py` — `t=caps` handler emitting the XML schema from `contracts/torznab-xml.md` with per-profile category filtering.
 - [X] T067 [US1] Extend `grabarr/api/torznab.py` — `t=search`, `t=book`, `t=movie`, `t=music` handlers calling the orchestrator and rendering the RSS response with Torznab attrs (seeders=1, peers=0, downloadvolumefactor=0, uploadvolumefactor=1, infohash).
-- [ ] T068 [US1] Extend `grabarr/api/torznab.py` — `/download/{token}.torrent` handler that kicks off the download-manager flow, waits for the torrent bytes, returns `application/x-bittorrent` with the `X-Grabarr-*` response headers.
+- [X] T068 [US1] Extend `grabarr/api/torznab.py` — `/download/{token}.torrent` handler that kicks off the download-manager flow, waits for the torrent bytes, returns `application/x-bittorrent` with the `X-Grabarr-*` response headers.
 - [X] T069 [US1] Create `grabarr/api/torznab.py` API-key middleware — verifies `apikey` query parameter against the target profile's bcrypt hash; returns 401 with `WWW-Authenticate` header on failure.
 
 ### Admin API (MVP scope: profiles + Prowlarr export)
@@ -157,38 +157,38 @@ Single-project Python layout under the repository root; package is `grabarr/`, t
 
 ### Download manager (sync mode — the clarified shipping default)
 
-- [ ] T072 [US1] Create `grabarr/downloads/verification.py` — per-format magic-byte table (EPUB, PDF, MOBI, MP3, FLAC, ZIP/CBZ, ISO), Content-Type rejection list (HTML/JSON/XML), size checks, 5 GB cap.
-- [ ] T073 [US1] Create `grabarr/downloads/sync.py` — `SyncDownloader.run(handle)` streaming the source into `/downloads/incoming/{token}/{filename}`, running verification, moving to `/downloads/ready/{token}/{filename}`, returning `(path, metadata)`.
-- [ ] T074 [US1] Create `grabarr/downloads/manager.py` — `DownloadManager.prepare_download(token, search_result)` dispatching by `settings.download.mode` (sync branch only for MVP; async/hybrid are US2).
-- [ ] T075 [US1] Create `grabarr/downloads/service.py` — high-level flow orchestrating `adapter.get_download_info()` → `DownloadManager` → TorrentServer handoff; persists state transitions in `downloads` table.
+- [X] T072 [US1] Create `grabarr/downloads/verification.py` — per-format magic-byte table (EPUB, PDF, MOBI, MP3, FLAC, ZIP/CBZ, ISO), Content-Type rejection list (HTML/JSON/XML), size checks, 5 GB cap.
+- [X] T073 [US1] Create `grabarr/downloads/sync.py` — `SyncDownloader.run(handle)` streaming the source into `/downloads/incoming/{token}/{filename}`, running verification, moving to `/downloads/ready/{token}/{filename}`, returning `(path, metadata)`.
+- [X] T074 [US1] Create `grabarr/downloads/manager.py` — `DownloadManager.prepare_download(token, search_result)` dispatching by `settings.download.mode` (sync branch only for MVP; async/hybrid are US2).
+- [X] T075 [US1] Create `grabarr/downloads/service.py` — high-level flow orchestrating `adapter.get_download_info()` → `DownloadManager` → TorrentServer handoff; persists state transitions in `downloads` table.
 
 ### Torrent server (active_seed — the shipping default)
 
-- [ ] T076 [US1] Create `grabarr/torrents/tracker.py` — FastAPI router mounted at `/announce` on the dedicated tracker port; bencoded compact + non-compact responses; SQLite `tracker_peers` reads/writes; 30-minute TTL sweeper task.
-- [ ] T077 [US1] Create `grabarr/torrents/active_seed.py` — `ActiveSeedGenerator` wrapping libtorrent: `session_params` with DHT/LSD disabled + PEX restricted, `create_torrent(info_hash, piece_size)` with internal tracker URL, `add_torrent` with `SEED_MODE` flag, piece-size ladder per research R-3.
-- [ ] T078 [US1] Create `grabarr/torrents/state.py` — shutdown hook dumps `session.state()` to `/data/session.state`; startup hook restores it if present.
-- [ ] T079 [US1] Create `grabarr/torrents/server.py` — `TorrentServer.generate(download)` dispatches by `settings.torrent.mode` (active_seed branch only for MVP); orchestrates tracker + session.
-- [ ] T080 [US1] Wire tracker listener startup + shutdown into `grabarr/api/app.py` lifespan (separate uvicorn worker on `settings.torrent.tracker_port`).
+- [X] T076 [US1] Create `grabarr/torrents/tracker.py` — FastAPI router mounted at `/announce` on the dedicated tracker port; bencoded compact + non-compact responses; SQLite `tracker_peers` reads/writes; 30-minute TTL sweeper task.
+- [X] T077 [US1] Create `grabarr/torrents/active_seed.py` — `ActiveSeedGenerator` wrapping libtorrent: `session_params` with DHT/LSD disabled + PEX restricted, `create_torrent(info_hash, piece_size)` with internal tracker URL, `add_torrent` with `SEED_MODE` flag, piece-size ladder per research R-3.
+- [X] T078 [US1] Create `grabarr/torrents/state.py` — shutdown hook dumps `session.state()` to `/data/session.state`; startup hook restores it if present.
+- [X] T079 [US1] Create `grabarr/torrents/server.py` — `TorrentServer.generate(download)` dispatches by `settings.torrent.mode` (active_seed branch only for MVP); orchestrates tracker + session.
+- [X] T080 [US1] Wire tracker listener startup + shutdown into `grabarr/api/app.py` lifespan (separate uvicorn worker on `settings.torrent.tracker_port`).
 
 ### Minimal admin UI (profiles list + Copy Prowlarr Config)
 
-- [ ] T081 [US1] Create `grabarr/web/routes.py` with HTML routes: `GET /` (dashboard), `GET /profiles`.
-- [ ] T082 [US1] Create `grabarr/web/templates/_base.html` — Tailwind shell, sticky nav, theme toggle (persisted in `localStorage`), dark/light system-detect, toast region.
-- [ ] T083 [US1] Create `grabarr/web/templates/partials/nav.html` — navigation links (Dashboard, Profiles, Sources, Downloads, Notifications, Stats, Settings) with hamburger menu under 768 px.
-- [ ] T084 [US1] Create `grabarr/web/templates/dashboard.html` — minimal: health banner, count of active downloads, count of seeded torrents, link to `/profiles`.
-- [ ] T085 [US1] Create `grabarr/web/templates/profiles/list.html` — card list of seeded profiles, each with: media-type badge, enabled toggle, `Copy Prowlarr Config` button (triggers `GET /api/prowlarr-config?profile={slug}` and offers download), link to `/profiles/{slug}` (placeholder for US3 edit page).
-- [ ] T086 [US1] Add vendored HTMX, Sortable, Chart.js scripts under `grabarr/web/static/js/` (downloaded via Makefile target, so static assets ship with the package).
-- [ ] T087 [US1] Run `make tailwind-build` once to produce the initial `grabarr/web/static/css/tailwind.build.css`.
+- [X] T081 [US1] Create `grabarr/web/routes.py` with HTML routes: `GET /` (dashboard), `GET /profiles`.
+- [X] T082 [US1] Create `grabarr/web/templates/_base.html` — Tailwind shell, sticky nav, theme toggle (persisted in `localStorage`), dark/light system-detect, toast region.
+- [X] T083 [US1] Create `grabarr/web/templates/partials/nav.html` — navigation links (Dashboard, Profiles, Sources, Downloads, Notifications, Stats, Settings) with hamburger menu under 768 px.
+- [X] T084 [US1] Create `grabarr/web/templates/dashboard.html` — minimal: health banner, count of active downloads, count of seeded torrents, link to `/profiles`.
+- [X] T085 [US1] Create `grabarr/web/templates/profiles/list.html` — card list of seeded profiles, each with: media-type badge, enabled toggle, `Copy Prowlarr Config` button (triggers `GET /api/prowlarr-config?profile={slug}` and offers download), link to `/profiles/{slug}` (placeholder for US3 edit page).
+- [X] T086 [US1] Add vendored HTMX, Sortable, Chart.js scripts under `grabarr/web/static/js/` (downloaded via Makefile target, so static assets ship with the package).
+- [X] T087 [US1] Run `make tailwind-build` once to produce the initial `grabarr/web/static/css/tailwind.build.css`.
 
 ### Docker deployment
 
-- [ ] T088 [US1] Create `Dockerfile` at repo root: builder stage installs libtorrent build deps + compiles the Python wheel per research R-10; runtime stage installs runtime libs, `uv sync --frozen`, copies source, copies compiled wheel, compiles Tailwind via the standalone binary, exposes 8080/8999/45000-45100, `CMD ["uvicorn", "grabarr.api.app:app", "--host", "0.0.0.0", "--port", "8080"]`.
-- [ ] T089 [US1] Create `docker-compose.example.yml` — `grabarr` service with all ports + volumes, `flaresolverr` sidecar pinned to `ghcr.io/flaresolverr/flaresolverr:3`, shared `grabarr_net` network, `restart: unless-stopped`, inline-documented env vars.
+- [X] T088 [US1] Create `Dockerfile` at repo root: builder stage installs libtorrent build deps + compiles the Python wheel per research R-10; runtime stage installs runtime libs, `uv sync --frozen`, copies source, copies compiled wheel, compiles Tailwind via the standalone binary, exposes 8080/8999/45000-45100, `CMD ["uvicorn", "grabarr.api.app:app", "--host", "0.0.0.0", "--port", "8080"]`.
+- [X] T089 [US1] Create `docker-compose.example.yml` — `grabarr` service with all ports + volumes, `flaresolverr` sidecar pinned to `ghcr.io/flaresolverr/flaresolverr:3`, shared `grabarr_net` network, `restart: unless-stopped`, inline-documented env vars.
 
 ### US1 integration smoke
 
-- [ ] T090 [US1] Create `tests/integration/test_us1_smoke.py` — spin up the app via `pytest-asyncio` + `httpx.AsyncClient`, mock IA `advancedsearch.php` + `metadata/{id}` with respx, POST a Torznab search, grab the returned `.torrent`, assert magic bytes match, assert the Prowlarr export JSON parses and contains the right fields.
-- [ ] T091 [US1] Create `tests/integration/test_us1_caps.py` — hit `/torznab/ebooks_general/api?t=caps` for every seeded profile, assert XML validates against the Torznab 1.3 schema.
+- [X] T090 [US1] Create `tests/integration/test_us1_smoke.py` — spin up the app via `pytest-asyncio` + `httpx.AsyncClient`, mock IA `advancedsearch.php` + `metadata/{id}` with respx, POST a Torznab search, grab the returned `.torrent`, assert magic bytes match, assert the Prowlarr export JSON parses and contains the right fields.
+- [X] T091 [US1] Create `tests/integration/test_us1_caps.py` — hit `/torznab/ebooks_general/api?t=caps` for every seeded profile, assert XML validates against the Torznab 1.3 schema.
 
 **Checkpoint**: US1 is shippable. A clean `docker compose up -d` boots, Prowlarr imports the seven profiles first-try, and a public-domain ebook grab completes end-to-end.
 

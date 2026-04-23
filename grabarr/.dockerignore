@@ -1,0 +1,33 @@
+# Keep the Docker build context tight.
+.git/
+.venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+*.pyc
+data/
+downloads/
+config.yaml
+*.session_state
+
+# Test + dev artefacts
+tests/
+htmlcov/
+coverage.xml
+.coverage*
+specs/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+
+# We don't ship Tailwind binaries from host (downloaded in builder).
+tailwindcss
+tailwindcss-*
+
+# Don't copy the Dockerfile/compose into the image.
+Dockerfile
+docker-compose*.yml
+.dockerignore

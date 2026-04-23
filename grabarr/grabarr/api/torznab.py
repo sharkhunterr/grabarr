@@ -14,11 +14,20 @@ from email.utils import format_datetime
 from urllib.parse import quote
 from xml.sax.saxutils import escape as xml_escape
 
-from fastapi import APIRouter, Query, Request
-from fastapi.responses import Response
+from pathlib import Path
+
+import aiofiles
+from fastapi import APIRouter, Header, HTTPException, Query, Request
+from fastapi.responses import Response, StreamingResponse
 
 from grabarr.core.categories import NEWZNAB_CATEGORIES
 from grabarr.core.logging import setup_logger
+from grabarr.downloads.service import (
+    DownloadNotFound,
+    get_download_by_token,
+    prepare_and_generate_torrent,
+    register_result_token,
+)
 from grabarr.profiles.models import Profile
 from grabarr.profiles.orchestrator import orchestrate_search
 from grabarr.profiles.service import (
@@ -98,19 +107,20 @@ def _guid_for(profile_slug: str, external_id: str) -> str:
 def _build_search_rss(
     profile: Profile,
     query: str,
-    results: list,
+    results_with_tokens: list[tuple],
     base_url: str,
 ) -> str:
-    """Render RSS 2.0 + Torznab extension for a search result set."""
+    """Render RSS 2.0 + Torznab extension for a search result set.
+
+    ``results_with_tokens`` is a list of ``(SearchResult, token_str)``
+    pairs. Tokens are pre-registered in the ``downloads`` table so the
+    *arr client can later resolve ``/download/{token}.torrent``.
+    """
     primary_cat = (profile.newznab_categories or [0])[0]
     items_xml: list[str] = []
 
-    for r in results:
+    for r, token in results_with_tokens:
         size = r.size_bytes or 0
-        # The token-based download URL won't work until the download
-        # manager lands; emit the resolvable token stub anyway so Prowlarr
-        # can parse the feed and the smoke test can verify shape.
-        token = f"{profile.slug}--{xml_escape(str(r.external_id))[:60]}"
         download_url = f"{base_url}/download/{quote(token)}.torrent"
 
         pub_date = format_datetime(dt.datetime.now(dt.UTC))
@@ -218,6 +228,119 @@ async def torznab_api(
         except Exception as exc:
             _log.warning("torznab: search crashed for %s q=%r: %s", slug, composite_q, exc)
             return _torznab_error(900, "search failed", status_code=500)
-        return _xml_response(_build_search_rss(profile, composite_q, results, base_url))
+
+        # Register a pending Download row per result so the *arr client
+        # can later resolve /download/{token}.torrent.
+        results_with_tokens: list[tuple] = []
+        for r in results:
+            token = await register_result_token(profile=profile, result=r)
+            results_with_tokens.append((r, token))
+
+        return _xml_response(_build_search_rss(profile, composite_q, results_with_tokens, base_url))
 
     return _torznab_error(202, f"unsupported operation: {t}")
+
+
+# ---- /download and /seed --------------------------------------------------
+
+
+def _tracker_port() -> int:
+    """Return the configured internal-tracker port.
+
+    For now we pull from the env; future work will move this into
+    ``settings.torrent.tracker_port`` and honour per-profile override.
+    """
+    import os
+
+    return int(os.environ.get("GRABARR_TRACKER_PORT", "8999"))
+
+
+@router.get("/torznab/{slug}/download/{token_ext}")
+async def torznab_download(slug: str, token_ext: str, request: Request) -> Response:
+    """Return the ``.torrent`` blob for ``token_ext`` (``{token}.torrent``)."""
+    if not token_ext.endswith(".torrent"):
+        raise HTTPException(status_code=404, detail="expected {token}.torrent")
+    token = token_ext[: -len(".torrent")]
+    host_base_url = f"{request.url.scheme}://{request.url.netloc}"
+    try:
+        blob = await prepare_and_generate_torrent(
+            slug=slug,
+            token=token,
+            host_base_url=host_base_url,
+            tracker_port=_tracker_port(),
+        )
+    except DownloadNotFound:
+        raise HTTPException(status_code=404, detail="token not found or expired") from None
+    return Response(
+        content=blob.bencoded,
+        media_type="application/x-bittorrent",
+        headers={
+            "Content-Disposition": f'attachment; filename="grabarr-{token[:10]}.torrent"',
+            "X-Grabarr-Info-Hash": blob.info_hash,
+            "X-Grabarr-Torrent-Mode": "webseed",
+        },
+    )
+
+
+@router.get("/torznab/{slug}/seed/{token}")
+@router.head("/torznab/{slug}/seed/{token}")
+async def torznab_seed(
+    slug: str,
+    token: str,
+    range: str | None = Header(default=None),  # noqa: A002 (http header name)
+) -> Response:
+    """HTTP Range-aware file server (BEP-19 webseed)."""
+    download = await get_download_by_token(token)
+    if download is None or not download.file_path:
+        raise HTTPException(status_code=404, detail="download not found or not ready")
+
+    path = Path(download.file_path)
+    if not path.exists():
+        raise HTTPException(status_code=410, detail="file no longer on disk")
+
+    file_size = path.stat().st_size
+    content_type = download.content_type or "application/octet-stream"
+    filename = path.name
+
+    # Parse Range header (single-range only).
+    start, end = 0, file_size - 1
+    partial = False
+    if range and range.lower().startswith("bytes="):
+        try:
+            spec = range.split("=", 1)[1].split(",", 1)[0]
+            s, e = spec.split("-", 1)
+            start = int(s) if s else 0
+            end = int(e) if e else file_size - 1
+            if 0 <= start <= end < file_size:
+                partial = True
+            else:
+                raise ValueError
+        except ValueError:
+            return Response(
+                status_code=416,
+                headers={"Content-Range": f"bytes */{file_size}"},
+            )
+
+    length = end - start + 1
+
+    async def body() -> object:  # type: ignore[misc]
+        async with aiofiles.open(path, "rb") as fh:
+            await fh.seek(start)
+            remaining = length
+            while remaining > 0:
+                chunk = await fh.read(min(64 * 1024, remaining))
+                if not chunk:
+                    break
+                remaining -= len(chunk)
+                yield chunk
+
+    headers = {
+        "Content-Type": content_type,
+        "Content-Length": str(length),
+        "Accept-Ranges": "bytes",
+        "Content-Disposition": f'attachment; filename="{filename}"',
+    }
+    if partial:
+        headers["Content-Range"] = f"bytes {start}-{end}/{file_size}"
+        return StreamingResponse(body(), status_code=206, headers=headers)
+    return StreamingResponse(body(), status_code=200, headers=headers)
