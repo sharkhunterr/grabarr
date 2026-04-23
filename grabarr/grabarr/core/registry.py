@@ -85,12 +85,12 @@ def discover_adapters(package: str = "grabarr.adapters") -> None:
         importlib.import_module(f"{package}.{info.name}")
 
 
-def get_registered_adapters() -> dict[str, type["SourceAdapter"]]:
+def get_registered_adapters() -> dict[str, type[SourceAdapter]]:
     """Return a copy of the id → class mapping."""
     return dict(_REGISTRY)
 
 
-def get_adapter_by_id(source_id: str) -> type["SourceAdapter"] | None:
+def get_adapter_by_id(source_id: str) -> type[SourceAdapter] | None:
     """Return the adapter class registered for ``source_id``, or None."""
     return _REGISTRY.get(source_id)
 

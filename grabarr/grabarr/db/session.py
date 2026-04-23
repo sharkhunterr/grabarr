@@ -20,11 +20,11 @@ from sqlalchemy.ext.asyncio import (
 from grabarr.core.config import get_settings
 
 __all__ = [
+    "close_engine",
     "get_engine",
     "get_sessionmaker",
-    "session_scope",
-    "close_engine",
     "reset_engine",
+    "session_scope",
 ]
 
 

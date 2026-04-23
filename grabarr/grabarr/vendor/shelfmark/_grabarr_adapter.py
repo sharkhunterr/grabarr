@@ -52,6 +52,30 @@ class ShelfmarkConfigProxy:
         # URL templates — Shelfmark builds these from mirrors at runtime
         # unless overridden.
         "AA_BASE_URL": "https://annas-archive.org",
+        # Cascade retry / timing knobs (Shelfmark defaults, copied
+        # verbatim from upstream env defaults so behaviour matches a
+        # fresh Shelfmark install).
+        "MAX_RETRY": 3,
+        "DEFAULT_SLEEP": 5,
+        "MAIN_LOOP_SLEEP_TIME": 5,
+        "MAX_CONCURRENT_DOWNLOADS": 3,
+        "DOWNLOAD_PROGRESS_UPDATE_INTERVAL": 5,
+        "TMP_DIR": "/tmp/grabarr",
+        "CUSTOM_DNS": "",
+        "DOH_SERVER": "",
+        "CERTIFICATE_VALIDATION": True,
+        "USE_DOH": False,
+        "USING_TOR": False,
+        "USING_EXTERNAL_BYPASSER": True,
+        "EXT_BYPASSER_URL": "http://flaresolverr:8191/v1",
+        "EXT_BYPASSER_PATH": "",
+        "EXT_BYPASSER_TIMEOUT": 60,
+        "HTTP_PROXY": "",
+        "HTTPS_PROXY": "",
+        "NO_PROXY": "",
+        "PROXY_MODE": "",
+        "DEBUG": False,
+        "BOOKS_OUTPUT_MODE": "download",
         # Formats Grabarr cares about. Shelfmark uses this to sort results
         # and pick which file to grab; matches the union of per-MediaType
         # ladders in grabarr.adapters.internet_archive.

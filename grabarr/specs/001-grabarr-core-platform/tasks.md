@@ -123,14 +123,14 @@ Single-project Python layout under the repository root; package is `grabarr/`, t
 
 ### Source adapters
 
-- [ ] T053 [US1] Create `grabarr/adapters/internet_archive.py` — shell file with `@register_adapter`, class definition, protocol-required attributes (`id="internet_archive"`, media types, `requires_cf_bypass=False`, `supports_member_key=False`).
-- [ ] T054 [US1] Extend `grabarr/adapters/internet_archive.py` — declare the `FILE_PREFERENCE_LADDERS: dict[MediaType, list[FilePreference]]` constant per research R-4 (9 ladders, ~40 rows).
-- [ ] T055 [US1] Extend `grabarr/adapters/internet_archive.py` — implement `search()` hitting `advancedsearch.php` with CDL filter appended, map the JSON response into `SearchResult` objects, apply user-agent with contact email.
-- [ ] T056 [US1] Extend `grabarr/adapters/internet_archive.py` — implement `get_download_info()` fetching `/metadata/{identifier}`, applying the ladder + blacklist, returning the best file URL.
-- [ ] T057 [US1] Extend `grabarr/adapters/internet_archive.py` — implement `health_check()` (probe `/services/search/v1/scrape?q=*&rows=1`), `get_config_schema()` (contact email field + collection filters), `get_quota_status()` returning `None`.
-- [ ] T058 [P] [US1] Create `grabarr/adapters/anna_archive.py` — thin wrapper class delegating `search()` and `get_download_info()` to the vendored `grabarr.vendor.shelfmark.release_sources.direct_download` module; translate `MediaType` to Shelfmark's `mediatype` filter; declare `supports_member_key=True`, `requires_cf_bypass=True`.
-- [ ] T059 [P] [US1] Create `grabarr/adapters/libgen.py` — thin wrapper delegating to vendored LibGen paths within `direct_download.py`; media types per spec FR-1.2.
-- [ ] T060 [P] [US1] Create `grabarr/adapters/zlibrary.py` — thin wrapper delegating to vendored Z-Lib paths; config schema exposes `remix_userid` + `remix_userkey` fields; quota + cookie-expired logic is deferred to US4.
+- [X] T053 [US1] Create `grabarr/adapters/internet_archive.py` — shell file with `@register_adapter`, class definition, protocol-required attributes (`id="internet_archive"`, media types, `requires_cf_bypass=False`, `supports_member_key=False`).
+- [X] T054 [US1] Extend `grabarr/adapters/internet_archive.py` — declare the `FILE_PREFERENCE_LADDERS: dict[MediaType, list[FilePreference]]` constant per research R-4 (9 ladders, ~40 rows).
+- [X] T055 [US1] Extend `grabarr/adapters/internet_archive.py` — implement `search()` hitting `advancedsearch.php` with CDL filter appended, map the JSON response into `SearchResult` objects, apply user-agent with contact email.
+- [X] T056 [US1] Extend `grabarr/adapters/internet_archive.py` — implement `get_download_info()` fetching `/metadata/{identifier}`, applying the ladder + blacklist, returning the best file URL.
+- [X] T057 [US1] Extend `grabarr/adapters/internet_archive.py` — implement `health_check()` (probe `/services/search/v1/scrape?q=*&rows=1`), `get_config_schema()` (contact email field + collection filters), `get_quota_status()` returning `None`.
+- [X] T058 [P] [US1] Create `grabarr/adapters/anna_archive.py` — thin wrapper class delegating `search()` and `get_download_info()` to the vendored `grabarr.vendor.shelfmark.release_sources.direct_download` module; translate `MediaType` to Shelfmark's `mediatype` filter; declare `supports_member_key=True`, `requires_cf_bypass=True`.
+- [X] T059 [P] [US1] Create `grabarr/adapters/libgen.py` — thin wrapper delegating to vendored LibGen paths within `direct_download.py`; media types per spec FR-1.2.
+- [X] T060 [P] [US1] Create `grabarr/adapters/zlibrary.py` — thin wrapper delegating to vendored Z-Lib paths; config schema exposes `remix_userid` + `remix_userkey` fields; quota + cookie-expired logic is deferred to US4.
 
 ### Bypass service
 
@@ -139,21 +139,21 @@ Single-project Python layout under the repository root; package is `grabarr/`, t
 
 ### Profiles, orchestrator, search-cache
 
-- [ ] T063 [US1] Create `grabarr/profiles/service.py` — CRUD methods (`list`, `get_by_slug`, `create`, `update`, `delete` with `is_default` guard, `regenerate_api_key`, `duplicate`); bcrypt hashing for API keys; cache invalidation on mutation.
-- [ ] T064 [US1] Create `grabarr/profiles/orchestrator.py` — `SearchOrchestrator.search(profile, query, filters)`, implementing `first_match` mode (aggregate_all deferred to US3), per-entry timeout, weight multiplier applied to `quality_score`, dedup by `(normalized_title, author, year, format)`.
+- [X] T063 [US1] Create `grabarr/profiles/service.py` — CRUD methods (`list`, `get_by_slug`, `create`, `update`, `delete` with `is_default` guard, `regenerate_api_key`, `duplicate`); bcrypt hashing for API keys; cache invalidation on mutation.
+- [X] T064 [US1] Create `grabarr/profiles/orchestrator.py` — `SearchOrchestrator.search(profile, query, filters)`, implementing `first_match` mode (aggregate_all deferred to US3), per-entry timeout, weight multiplier applied to `quality_score`, dedup by `(normalized_title, author, year, format)`.
 - [ ] T065 [US1] Create `grabarr/profiles/cache.py` — 15-minute TTL search cache keyed by `sha256(normalized_query | profile_slug | filters_hash)` backed by `search_cache` table.
 
 ### Torznab endpoint
 
-- [ ] T066 [US1] Create `grabarr/api/torznab.py` — `t=caps` handler emitting the XML schema from `contracts/torznab-xml.md` with per-profile category filtering.
-- [ ] T067 [US1] Extend `grabarr/api/torznab.py` — `t=search`, `t=book`, `t=movie`, `t=music` handlers calling the orchestrator and rendering the RSS response with Torznab attrs (seeders=1, peers=0, downloadvolumefactor=0, uploadvolumefactor=1, infohash).
+- [X] T066 [US1] Create `grabarr/api/torznab.py` — `t=caps` handler emitting the XML schema from `contracts/torznab-xml.md` with per-profile category filtering.
+- [X] T067 [US1] Extend `grabarr/api/torznab.py` — `t=search`, `t=book`, `t=movie`, `t=music` handlers calling the orchestrator and rendering the RSS response with Torznab attrs (seeders=1, peers=0, downloadvolumefactor=0, uploadvolumefactor=1, infohash).
 - [ ] T068 [US1] Extend `grabarr/api/torznab.py` — `/download/{token}.torrent` handler that kicks off the download-manager flow, waits for the torrent bytes, returns `application/x-bittorrent` with the `X-Grabarr-*` response headers.
-- [ ] T069 [US1] Create `grabarr/api/torznab.py` API-key middleware — verifies `apikey` query parameter against the target profile's bcrypt hash; returns 401 with `WWW-Authenticate` header on failure.
+- [X] T069 [US1] Create `grabarr/api/torznab.py` API-key middleware — verifies `apikey` query parameter against the target profile's bcrypt hash; returns 401 with `WWW-Authenticate` header on failure.
 
 ### Admin API (MVP scope: profiles + Prowlarr export)
 
-- [ ] T070 [US1] Create `grabarr/api/admin.py` — `/api/profiles` GET list, GET detail, POST create, PATCH update, DELETE (with `is_default` guard), POST `/regenerate-key`.
-- [ ] T071 [US1] Extend `grabarr/api/admin.py` — `/api/prowlarr-config?profile={slug}` endpoint returning the JSON blob per `contracts/prowlarr-export.json` with `{host}`, `{api_key_plain}`, `{profile_slug}` substitutions (a one-shot fresh API key is minted and shown in the JSON).
+- [X] T070 [US1] Create `grabarr/api/admin.py` — `/api/profiles` GET list, GET detail, POST create, PATCH update, DELETE (with `is_default` guard), POST `/regenerate-key`.
+- [X] T071 [US1] Extend `grabarr/api/admin.py` — `/api/prowlarr-config?profile={slug}` endpoint returning the JSON blob per `contracts/prowlarr-export.json` with `{host}`, `{api_key_plain}`, `{profile_slug}` substitutions (a one-shot fresh API key is minted and shown in the JSON).
 
 ### Download manager (sync mode — the clarified shipping default)
 

@@ -14,7 +14,6 @@ from __future__ import annotations
 
 from grabarr.core.enums import MediaType
 
-
 # Canonical Newznab categories we emit in Torznab ``<caps>``/``<item>``
 # responses and accept in the Prowlarr export. Keys are integer codes per
 # the Newznab spec; values are the human-readable names Prowlarr displays.

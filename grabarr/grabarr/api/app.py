@@ -25,7 +25,9 @@ from fastapi import FastAPI
 from sqlalchemy import select
 
 from grabarr import __version__
+from grabarr.api.admin import router as admin_router
 from grabarr.api.health import router as health_router
+from grabarr.api.torznab import router as torznab_router
 from grabarr.core.config import install_shelfmark_bridge, load_settings
 from grabarr.core.logging import configure_root, setup_logger
 from grabarr.db.session import close_engine, session_scope
@@ -86,7 +88,7 @@ class _SettingsBackend:
             row = await session.execute(select(Setting.value).where(Setting.key == key))
             return row.scalar_one_or_none()
 
-    def get(self, key: str, default: object = None) -> object:  # noqa: D401
+    def get(self, key: str, default: object = None) -> object:
         """Synchronous fallback — returns the built-in default.
 
         Shelfmark's vendored code calls ``config.get()`` synchronously
@@ -142,6 +144,8 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
     app.include_router(health_router)
+    app.include_router(admin_router)
+    app.include_router(torznab_router)
     return app
 
 

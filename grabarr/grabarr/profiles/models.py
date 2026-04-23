@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from sqlalchemy import Boolean, CheckConstraint, Index, JSON, String, Text
+from sqlalchemy import JSON, Boolean, CheckConstraint, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from grabarr.db.base import Base, UUIDColumn, _new_uuidv7

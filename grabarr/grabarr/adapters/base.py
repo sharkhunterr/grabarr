@@ -12,6 +12,7 @@ from typing import Protocol, runtime_checkable
 
 from grabarr.core.enums import MediaType
 from grabarr.core.models import (
+    ConfigField,
     ConfigSchema,
     DownloadInfo,
     HealthStatus,
@@ -21,22 +22,23 @@ from grabarr.core.models import (
 )
 
 __all__ = [
-    "SourceAdapter",
-    "AdapterError",
-    "AdapterConnectivityError",
-    "AdapterBypassError",
     "AdapterAuthError",
+    "AdapterBypassError",
+    "AdapterConnectivityError",
+    "AdapterError",
+    "AdapterNotFound",
     "AdapterQuotaError",
     "AdapterRateLimitError",
     "AdapterServerError",
-    "AdapterNotFound",
-    "MediaType",
-    "SearchFilters",
-    "SearchResult",
+    "ConfigField",
+    "ConfigSchema",
     "DownloadInfo",
     "HealthStatus",
+    "MediaType",
     "QuotaStatus",
-    "ConfigSchema",
+    "SearchFilters",
+    "SearchResult",
+    "SourceAdapter",
 ]
 
 

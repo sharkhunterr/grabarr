@@ -5,11 +5,11 @@ from __future__ import annotations
 import datetime as dt
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     CheckConstraint,
     Index,
     Integer,
-    JSON,
     LargeBinary,
     String,
     Text,

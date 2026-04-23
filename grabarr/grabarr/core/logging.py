@@ -84,7 +84,7 @@ def _redact_string(s: str) -> str:
     return s
 
 
-def _redact_obj(obj: Any) -> Any:  # noqa: PLR0911
+def _redact_obj(obj: Any) -> Any:
     """Recursively redact dicts / lists / strings."""
     if isinstance(obj, str):
         return _redact_string(obj)
