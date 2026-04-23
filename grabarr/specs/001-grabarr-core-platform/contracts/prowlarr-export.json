@@ -1,0 +1,65 @@
+{
+  "_comment_header": "Canonical shape returned by GET /api/prowlarr-config?profile={slug}. Matches Prowlarr's Generic Torznab indexer import schema. Copy-paste into Prowlarr > Add Indexer > Generic Torznab. Replace {host} / {api_key_plain} / {profile_slug} with actual values at emit time.",
+  "enable": true,
+  "redirect": false,
+  "supportsRss": true,
+  "supportsSearch": true,
+  "supportsRedirect": false,
+  "supportsPagination": true,
+  "name": "Grabarr — {profile_name}",
+  "fields": [
+    {
+      "order": 0,
+      "name": "baseUrl",
+      "label": "URL",
+      "value": "http://{host}/torznab/{profile_slug}/"
+    },
+    {
+      "order": 1,
+      "name": "apiPath",
+      "label": "API Path",
+      "value": "/api"
+    },
+    {
+      "order": 2,
+      "name": "apiKey",
+      "label": "API Key",
+      "value": "{api_key_plain}",
+      "privacy": "apiKey"
+    },
+    {
+      "order": 3,
+      "name": "categories",
+      "label": "Categories",
+      "value": [7020],
+      "type": "select"
+    },
+    {
+      "order": 4,
+      "name": "minimumSeeders",
+      "label": "Minimum Seeders",
+      "value": 1
+    },
+    {
+      "order": 5,
+      "name": "seedCriteria.seedRatio",
+      "label": "Seed Ratio",
+      "value": null
+    },
+    {
+      "order": 6,
+      "name": "seedCriteria.seedTime",
+      "label": "Seed Time (minutes)",
+      "value": null
+    }
+  ],
+  "implementationName": "Torznab",
+  "implementation": "Torznab",
+  "configContract": "TorznabSettings",
+  "infoLink": "http://{host}/",
+  "tags": ["grabarr", "{profile_slug}"],
+  "protocol": "torrent",
+  "privacy": "public",
+  "priority": 25,
+  "downloadClientId": 0
+}
