@@ -12,6 +12,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 from email.utils import format_datetime
+from typing import Any
 from urllib.parse import quote
 from xml.sax.saxutils import escape as xml_escape
 
@@ -105,6 +106,59 @@ def _guid_for(profile_slug: str, external_id: str) -> str:
     return f"grabarr:{profile_slug}:{external_id}"
 
 
+# ISO 639 2→3 / language-name → ISO 639-1 normalisation. Sources return
+# "en", "eng", "en-US", "English", "français" — Bookshelf only accepts the
+# two-letter code. We keep a short allowlist + fallback to the first two
+# chars of anything else, which catches most non-English cases.
+_LANG_ALIASES = {
+    "en": "en", "eng": "en", "en-us": "en", "en-gb": "en", "english": "en",
+    "fr": "fr", "fre": "fr", "fra": "fr", "french": "fr", "français": "fr", "francais": "fr",
+    "de": "de", "ger": "de", "deu": "de", "german": "de", "deutsch": "de",
+    "es": "es", "spa": "es", "spanish": "es", "español": "es", "espanol": "es",
+    "it": "it", "ita": "it", "italian": "it", "italiano": "it",
+    "pt": "pt", "por": "pt", "portuguese": "pt", "português": "pt",
+    "ru": "ru", "rus": "ru", "russian": "ru",
+    "zh": "zh", "chi": "zh", "zho": "zh", "chinese": "zh",
+    "ja": "ja", "jpn": "ja", "japanese": "ja",
+    "ko": "ko", "kor": "ko", "korean": "ko",
+    "nl": "nl", "dut": "nl", "nld": "nl", "dutch": "nl", "nederlands": "nl",
+    "pl": "pl", "pol": "pl", "polish": "pl",
+    "sv": "sv", "swe": "sv", "swedish": "sv",
+}
+
+
+def _normalize_language(lang: str | None) -> str | None:
+    """Collapse source-specific language strings to ISO 639-1 when possible."""
+    if not lang:
+        return None
+    key = lang.strip().lower()
+    if key in _LANG_ALIASES:
+        return _LANG_ALIASES[key]
+    # Fallback: take first two letters (covers "EN", "EN-US", etc.).
+    first = key.split("-", 1)[0].split(";", 1)[0].strip()
+    if len(first) == 2 and first.isalpha():
+        return first
+    return key[:2] if len(key) >= 2 else None
+
+
+def _build_release_title(r: Any) -> str:  # noqa: ANN401
+    """Scene-style title so Bookshelf / Readarr parsers succeed.
+
+    Format: ``{Author} - {Title} ({year}) [FORMAT]`` with reasonable
+    fallbacks for each missing field.
+    """
+    parts: list[str] = []
+    if r.author:
+        parts.append(str(r.author).strip())
+    parts.append(str(r.title).strip())
+    out = " - ".join(parts)
+    if r.year:
+        out += f" ({r.year})"
+    if r.format and r.format != "?":
+        out += f" [{r.format.upper()}]"
+    return out
+
+
 def _pseudo_info_hash(profile_slug: str, source_id: str, external_id: str) -> str:
     """Stable 40-char hex derived from (profile, source, external_id).
 
@@ -137,9 +191,8 @@ def _build_search_rss(
         size = r.size_bytes or 0
         download_url = f"{base_url}/download/{quote(token)}.torrent"
 
-        # pubDate drives Prowlarr's "Age" column. Use the item's year when
-        # known (Jan 1 UTC); fall back to "now" so brand-new items still
-        # have a sensible date.
+        # pubDate drives "Age" column. Use the item's year when known
+        # (Jan 1 UTC); fall back to "now".
         if r.year and 1000 <= r.year <= 9999:
             pub_date = format_datetime(
                 dt.datetime(r.year, 1, 1, 0, 0, 0, tzinfo=dt.UTC)
@@ -147,21 +200,52 @@ def _build_search_rss(
         else:
             pub_date = format_datetime(dt.datetime.now(dt.UTC))
 
+        # Build a scene-style release title so Bookshelf/Readarr's
+        # parser can extract author/title/year/format cleanly.
+        #   "{Author} - {Title} ({year}) [{FORMAT}]"
+        release_title = _build_release_title(r)
+
+        # Collect every optional torznab:attr into one list.
         extras: list[str] = []
         if r.author:
             extras.append(f'<torznab:attr name="author" value="{xml_escape(r.author)}"/>')
+            extras.append(f'<torznab:attr name="artist" value="{xml_escape(r.author)}"/>')
         if r.year:
             extras.append(f'<torznab:attr name="year" value="{r.year}"/>')
+            extras.append(f'<torznab:attr name="publishdate" value="{r.year}-01-01T00:00:00"/>')
         if r.language:
-            extras.append(f'<torznab:attr name="language" value="{xml_escape(r.language)}"/>')
+            norm_lang = _normalize_language(r.language)
+            if norm_lang:
+                extras.append(f'<torznab:attr name="language" value="{xml_escape(norm_lang)}"/>')
+        # Book-specific attrs Bookshelf / Readarr look for.
+        if r.title:
+            extras.append(f'<torznab:attr name="booktitle" value="{xml_escape(r.title)}"/>')
+            extras.append(f'<torznab:attr name="book" value="{xml_escape(r.title)}"/>')
+        publisher = (r.metadata or {}).get("publisher")
+        if publisher:
+            extras.append(f'<torznab:attr name="publisher" value="{xml_escape(str(publisher))}"/>')
+        isbn = (r.metadata or {}).get("isbn")
+        if isbn:
+            extras.append(f'<torznab:attr name="isbn" value="{xml_escape(str(isbn))}"/>')
+        if r.format and r.format != "?":
+            fmt = r.format.lower().lstrip(".")
+            extras.append(f'<torznab:attr name="format" value="{xml_escape(fmt.upper())}"/>')
+            extras.append(f'<torznab:attr name="codec" value="{xml_escape(fmt.upper())}"/>')
+            # For audio: bitrate / quality are expected too; skipped for now.
 
-        desc = f"{r.format.upper()} via {r.source_id}"
+        desc_bits: list[str] = []
+        if r.format and r.format != "?":
+            desc_bits.append(r.format.upper())
+        desc_bits.append(f"via {r.source_id}")
+        if r.language:
+            desc_bits.append(f"lang:{_normalize_language(r.language) or r.language}")
+        desc = " · ".join(desc_bits)
 
         items_xml.append(
             "    <item>\n"
-            f"      <title>{xml_escape(r.title)}</title>\n"
+            f"      <title>{xml_escape(release_title)}</title>\n"
             f"      <description>{xml_escape(desc)}</description>\n"
-            f'      <guid isPermaLink="true">{xml_escape(_guid_for(profile.slug, r.external_id))}</guid>\n'
+            f'      <guid isPermaLink="true">{xml_escape(download_url)}</guid>\n'
             f"      <pubDate>{pub_date}</pubDate>\n"
             f"      <size>{size}</size>\n"
             f"      <category>{primary_cat}</category>\n"
@@ -170,12 +254,9 @@ def _build_search_rss(
             f'      <torznab:attr name="category" value="{primary_cat}"/>\n'
             '      <torznab:attr name="seeders" value="1"/>\n'
             '      <torznab:attr name="peers" value="0"/>\n'
+            '      <torznab:attr name="grabs" value="0"/>\n'
             '      <torznab:attr name="downloadvolumefactor" value="0"/>\n'
             '      <torznab:attr name="uploadvolumefactor" value="1"/>\n'
-            # Deterministic per-item pseudo-hash so Prowlarr accepts the
-            # row and dedups correctly. The real .torrent info_hash is
-            # computed lazily when the *arr client grabs the download;
-            # Prowlarr never inspects the .torrent bytes to verify this.
             f'      <torznab:attr name="infohash" value="{_pseudo_info_hash(profile.slug, r.source_id, r.external_id)}"/>\n'
             + "\n".join(f"      {x}" for x in extras)
             + ("\n" if extras else "")

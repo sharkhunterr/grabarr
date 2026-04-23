@@ -2,94 +2,141 @@
 {% block title %}Sources · Grabarr{% endblock %}
 
 {% block content %}
-<h1 class="text-2xl font-bold mb-6">Sources</h1>
+<div class="flex flex-wrap items-start justify-between gap-4 mb-6">
+  <div>
+    <h1 class="page-title">Sources</h1>
+    <p class="page-subtitle">Adapter health, rate-limits, and per-source credentials.</p>
+  </div>
+</div>
 
-<div class="grid gap-4 md:grid-cols-2">
+<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
   {% for item in items %}
   {% set h = item.health %}
-  <div class="card">
-    <div class="flex items-start justify-between gap-3">
-      <div>
-        <div class="flex items-center gap-2">
-          <span class="health-dot
-            {% if h.status == 'healthy' %}bg-green-500
-            {% elif h.status == 'degraded' %}bg-amber-500
-            {% elif h.status == 'unhealthy' %}bg-red-500
-            {% else %}bg-gray-400{% endif %} h-3 w-3 rounded-full inline-block"></span>
-          <h2 class="text-lg font-semibold">{{ item.display_name }}</h2>
-          <code class="text-xs text-gray-500 dark:text-gray-400">{{ item.id }}</code>
-        </div>
-        <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-          status: <strong>{{ h.status }}</strong>
-          {% if h.reason %} · reason: {{ h.reason }}{% endif %}
-          {% if h.last_check_at %} · last check {{ h.last_check_at }}{% endif %}
+  <div class="card card-hover">
+    <div class="card-body flex flex-col h-full">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-2">
+            <span class="health-dot
+              {% if h.status == 'healthy' %}health-ok
+              {% elif h.status == 'degraded' %}health-warn
+              {% elif h.status == 'unhealthy' %}health-bad
+              {% else %}health-idle{% endif %}"></span>
+            <h2 class="text-lg font-semibold truncate">{{ item.display_name }}</h2>
+          </div>
+          <p class="text-xs font-mono text-gray-500 dark:text-gray-400 mt-0.5 truncate">{{ item.id }}</p>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            status: <strong class="text-gray-700 dark:text-gray-200">{{ h.status }}</strong>
+            {% if h.reason %} · reason: {{ h.reason }}{% endif %}
+          </p>
         </div>
       </div>
-      <button class="btn-secondary text-xs"
-              onclick="testSource(this, '{{ item.id }}')">Test Now</button>
-    </div>
 
-    <div class="mt-3 flex flex-wrap gap-1 text-xs">
-      {% for mt in item.supported_media_types %}
-        <span class="badge-neutral">{{ mt }}</span>
-      {% endfor %}
-      {% if item.requires_cf_bypass %}<span class="badge-warning">cf bypass</span>{% endif %}
-      {% if item.supports_member_key %}<span class="badge-neutral">member key</span>{% endif %}
-    </div>
-
-    {% if item.quota %}
-    <div class="mt-3 rounded border border-amber-200 bg-amber-50 p-3 text-xs dark:border-amber-900 dark:bg-amber-900/30">
-      <strong>Quota:</strong> {{ item.quota.used }} / {{ item.quota.limit }}
-      · resets {{ item.quota.resets_at }}
-    </div>
-    {% endif %}
-
-    {% if item.config_schema.fields %}
-    <details class="mt-3">
-      <summary class="text-sm cursor-pointer select-none">Config fields</summary>
-      <ul class="mt-2 space-y-1 text-xs">
-        {% for f in item.config_schema.fields %}
-          <li>
-            <code>{{ f.key }}</code>
-            {% if f.required %}<span class="text-red-500">*</span>{% endif %}
-            {% if f.secret %}<span class="badge-warning">secret</span>{% endif %}
-            {% if f.help_text %}<p class="text-gray-500 dark:text-gray-400">{{ f.help_text }}</p>{% endif %}
-          </li>
+      <div class="mt-3 flex flex-wrap gap-1">
+        {% for mt in item.supported_media_types %}
+          <span class="badge-neutral">{{ mt }}</span>
         {% endfor %}
-      </ul>
-      <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-        Set these via <code>config.yaml</code> or env vars (<code>GRABARR_SOURCES__&lt;ID&gt;__&lt;FIELD&gt;</code>).
-      </p>
-    </details>
-    {% endif %}
+        {% if item.requires_cf_bypass %}<span class="badge-warning">cf bypass</span>{% endif %}
+        {% if item.supports_member_key %}<span class="badge-brand">member key</span>{% endif %}
+      </div>
+
+      {% if item.quota %}
+      <div class="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs
+                  dark:border-amber-900 dark:bg-amber-900/20">
+        <div class="font-semibold text-amber-800 dark:text-amber-200">Daily quota</div>
+        <div class="mt-1">{{ item.quota.used }} / {{ item.quota.limit }} used · resets {{ item.quota.resets_at[:10] }}</div>
+      </div>
+      {% endif %}
+
+      <div class="mt-auto flex flex-wrap gap-2 pt-4">
+        <button type="button" class="btn-primary flex-1 min-w-[120px]"
+                onclick="testSource(this, '{{ item.id }}')">Test now</button>
+        {% if item.config_schema.fields %}
+        <button type="button" class="btn-secondary"
+                data-id="{{ item.id }}"
+                data-name="{{ item.display_name }}"
+                data-schema='{{ item.config_schema.fields | tojson }}'
+                onclick="openConfig(this)">Configure</button>
+        {% endif %}
+      </div>
+    </div>
   </div>
   {% endfor %}
 </div>
 
+<p class="mt-6 text-xs text-gray-500 dark:text-gray-400">
+  <strong>Note:</strong> credentials (AA member key, Z-Library cookies) live in
+  <code>config.yaml</code> or <code>GRABARR_*</code> environment variables —
+  the Configure modal shows the exact keys. Grabarr never logs them.
+</p>
+{% endblock %}
+
+{% block scripts %}
 {% raw %}
 <script>
   async function testSource(btn, id) {
-    btn.disabled = true; btn.textContent = 'Testing...';
+    btn.disabled = true; const orig = btn.textContent; btn.textContent = 'Testing…';
     const r = await fetch(`/api/sources/${id}/test`, {method: 'POST'});
     const data = await r.json();
-    btn.disabled = false; btn.textContent = 'Test Now';
-    const kind = data.status === 'healthy' ? 'ok' : (data.status === 'degraded' ? 'warn' : 'err');
+    btn.disabled = false; btn.textContent = orig;
+    const kind = data.status === 'healthy' ? 'success'
+               : (data.status === 'degraded' ? 'warning' : 'error');
     showModal({
-      title: `Test result — ${id}`,
+      title: `Test — ${id}`,
       html: `
         <dl class="space-y-3 text-sm">
           <div><dt class="text-xs uppercase text-gray-500 dark:text-gray-400">Status</dt>
-               <dd class="mt-1"><span class="badge-${kind === 'ok' ? 'success' : (kind === 'warn' ? 'warning' : 'error')}">${data.status || '—'}</span></dd></div>
+               <dd class="mt-1"><span class="badge-${kind}">${data.status || '—'}</span></dd></div>
           <div><dt class="text-xs uppercase text-gray-500 dark:text-gray-400">Reason</dt>
                <dd class="mt-1">${data.reason || '—'}</dd></div>
           <div><dt class="text-xs uppercase text-gray-500 dark:text-gray-400">Last check</dt>
                <dd class="mt-1 font-mono text-xs">${data.last_check_at || '—'}</dd></div>
-          ${data.last_error_message ? `<div><dt class="text-xs uppercase text-gray-500 dark:text-gray-400">Message</dt><dd class="mt-1 font-mono text-xs break-all">${data.last_error_message}</dd></div>` : ''}
+          ${data.last_error_message ? `
+            <div><dt class="text-xs uppercase text-gray-500 dark:text-gray-400">Message</dt>
+                 <dd class="mt-1 font-mono text-xs break-all bg-gray-100 dark:bg-gray-800 rounded p-2">${data.last_error_message}</dd></div>
+          ` : ''}
         </dl>
       `,
       actions: [{ label: 'Close', class: 'btn-primary' }],
     });
-    setTimeout(() => window.location.reload(), 3500);
+    setTimeout(() => window.location.reload(), 4000);
+  }
+
+  function openConfig(btn) {
+    const id = btn.dataset.id;
+    const name = btn.dataset.name;
+    const fields = JSON.parse(btn.dataset.schema);
+    const rows = fields.map(f => {
+      const envKey = 'GRABARR_' + (f.key || '').replace(/\./g, '__').toUpperCase();
+      return `
+        <div class="rounded-lg border border-gray-200 dark:border-gray-800 p-3 space-y-2">
+          <div class="flex flex-wrap items-center gap-2">
+            <strong class="text-sm">${f.label}</strong>
+            ${f.required ? '<span class="badge-error">required</span>' : ''}
+            ${f.secret ? '<span class="badge-warning">secret</span>' : ''}
+          </div>
+          ${f.help_text ? `<p class="text-xs text-gray-500 dark:text-gray-400">${f.help_text}</p>` : ''}
+          <div class="text-xs">
+            <div class="text-gray-500 dark:text-gray-400 mt-2">YAML key in config.yaml</div>
+            <code class="block font-mono bg-gray-100 dark:bg-gray-800 rounded px-2 py-1 break-all">${f.key}</code>
+            <div class="text-gray-500 dark:text-gray-400 mt-2">Or as environment variable</div>
+            <code class="block font-mono bg-gray-100 dark:bg-gray-800 rounded px-2 py-1 break-all">${envKey}</code>
+          </div>
+        </div>
+      `;
+    }).join('');
+    showModal({
+      title: `Configure — ${name}`,
+      wide: true,
+      html: `
+        <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+          Credentials live in <code>config.yaml</code> or as environment variables.
+          Edit the file, then restart Grabarr for changes to take effect.
+        </p>
+        <div class="space-y-3">${rows || '<p class="text-sm text-gray-500">No configurable fields.</p>'}</div>
+      `,
+      actions: [{ label: 'Close', class: 'btn-primary' }],
+    });
   }
 </script>
 {% endraw %}

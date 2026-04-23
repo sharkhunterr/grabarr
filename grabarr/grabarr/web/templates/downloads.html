@@ -2,85 +2,51 @@
 {% block title %}Downloads · Grabarr{% endblock %}
 
 {% block content %}
-<div class="flex items-center justify-between mb-6">
-  <h1 class="text-2xl font-bold">Downloads</h1>
-  <div class="text-sm text-gray-500 dark:text-gray-400">
-    {{ total }} total · page {{ page }} / {{ pages }}
+<div class="flex flex-wrap items-start justify-between gap-4 mb-6">
+  <div>
+    <h1 class="page-title">Downloads</h1>
+    <p class="page-subtitle">{{ total }} total · page {{ page }} / {{ pages }}</p>
   </div>
+  <button type="button" class="btn-secondary" onclick="openFilters()">Filters</button>
 </div>
-
-<form method="get" class="card mb-6 flex flex-wrap gap-3 items-end">
-  <div>
-    <label class="label" for="f-status">Status</label>
-    <select id="f-status" name="status" class="input">
-      <option value="">(any)</option>
-      {% for s in ['queued','resolving','downloading','verifying','ready','seeding','completed','failed'] %}
-        <option value="{{ s }}" {% if filter_status == s %}selected{% endif %}>{{ s }}</option>
-      {% endfor %}
-    </select>
-  </div>
-  <div>
-    <label class="label" for="f-source">Source</label>
-    <input id="f-source" name="source" class="input" value="{{ filter_source }}">
-  </div>
-  <div>
-    <label class="label" for="f-profile">Profile slug</label>
-    <input id="f-profile" name="profile" class="input" value="{{ filter_profile }}">
-  </div>
-  <div class="flex-1 min-w-[200px]">
-    <label class="label" for="f-q">Title / author contains</label>
-    <input id="f-q" name="q" class="input" value="{{ filter_q }}">
-  </div>
-  <button type="submit" class="btn-primary">Filter</button>
-  <a href="/downloads" class="btn-ghost">Reset</a>
-</form>
 
 <div class="card overflow-x-auto">
   <table class="w-full text-sm">
     <thead class="text-left text-xs uppercase text-gray-500 dark:text-gray-400">
-      <tr>
-        <th class="py-2">Started</th>
-        <th>Title</th>
-        <th>Author</th>
-        <th>Profile</th>
-        <th>Source</th>
-        <th>Mode</th>
-        <th>Size</th>
-        <th>Status</th>
-        <th></th>
+      <tr class="border-b border-gray-200 dark:border-gray-800">
+        <th class="px-4 py-3 font-medium">Started</th>
+        <th class="px-4 py-3 font-medium">Title</th>
+        <th class="px-4 py-3 font-medium">Profile</th>
+        <th class="px-4 py-3 font-medium">Source</th>
+        <th class="px-4 py-3 font-medium">Size</th>
+        <th class="px-4 py-3 font-medium">Status</th>
+        <th class="px-4 py-3"></th>
       </tr>
     </thead>
-    <tbody>
+    <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
       {% for d in items %}
-      <tr class="border-t border-gray-100 dark:border-gray-700">
-        <td class="py-2 font-mono text-xs whitespace-nowrap">{{ d.started_at[:19] if d.started_at else '—' }}</td>
-        <td class="max-w-sm truncate" title="{{ d.title }}">{{ d.title }}</td>
-        <td class="text-xs">{{ d.author or '—' }}</td>
-        <td><a href="/profiles" class="text-indigo-600 hover:underline dark:text-indigo-400">{{ d.profile_slug }}</a></td>
-        <td class="text-xs">{{ d.source_id }}</td>
-        <td class="text-xs">
-          <span class="badge-neutral">{{ d.download_mode }}</span>
-          <span class="badge-neutral">{{ d.torrent_mode }}</span>
+      <tr class="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50"
+          data-download='{{ d | tojson }}' onclick="openDetail(this)">
+        <td class="px-4 py-2.5 font-mono text-xs whitespace-nowrap text-gray-500">{{ (d.started_at or '—')[:16] }}</td>
+        <td class="px-4 py-2.5 max-w-sm truncate" title="{{ d.title }}">{{ d.title }}</td>
+        <td class="px-4 py-2.5"><span class="badge-brand">{{ d.profile_slug }}</span></td>
+        <td class="px-4 py-2.5 text-xs font-mono">{{ d.source_id }}</td>
+        <td class="px-4 py-2.5 text-xs whitespace-nowrap">
+          {% if d.size_bytes %}{{ (d.size_bytes / 1024 / 1024) | round(1) }} MB{% else %}—{% endif %}
         </td>
-        <td class="text-xs">{% if d.size_bytes %}{{ (d.size_bytes / 1024 / 1024) | round(1) }} MB{% else %}—{% endif %}</td>
-        <td>
-          {% if d.status == 'seeding' or d.status == 'completed' %}
-            <span class="badge-success">{{ d.status }}</span>
-          {% elif d.status == 'failed' %}
-            <span class="badge-error" title="{{ d.failure_reason or '' }}">{{ d.status }}</span>
-          {% elif d.status in ['queued','resolving','downloading','verifying'] %}
-            <span class="badge-warning">{{ d.status }}</span>
-          {% else %}
-            <span class="badge-neutral">{{ d.status }}</span>
-          {% endif %}
+        <td class="px-4 py-2.5">
+          {% if d.status in ['seeding','completed'] %}<span class="badge-success">{{ d.status }}</span>
+          {% elif d.status == 'failed' %}<span class="badge-error" title="{{ d.failure_reason or '' }}">{{ d.status }}</span>
+          {% elif d.status in ['queued','resolving','downloading','verifying'] %}<span class="badge-warning">{{ d.status }}</span>
+          {% else %}<span class="badge-neutral">{{ d.status }}</span>{% endif %}
         </td>
-        <td>
-          <button class="text-xs text-red-600 hover:underline"
-                  onclick="deleteDownload('{{ d.id }}')">delete</button>
+        <td class="px-4 py-2.5 text-right">
+          <button class="btn-ghost btn-sm text-red-600"
+                  onclick="event.stopPropagation(); deleteDownload('{{ d.id }}')">×</button>
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="9" class="py-4 text-center text-gray-500 dark:text-gray-400">
+      <tr><td colspan="7" class="px-4 py-6 text-center text-gray-500 dark:text-gray-400">
         No downloads recorded yet.
       </td></tr>
       {% endfor %}
@@ -91,29 +57,116 @@
 <div class="mt-4 flex items-center justify-between text-sm">
   <div>
     {% if page > 1 %}
-      <a href="?page={{ page - 1 }}{{ query_suffix }}" class="btn-secondary">&larr; Previous</a>
+      <a href="?page={{ page - 1 }}{{ query_suffix }}" class="btn-secondary">← Previous</a>
     {% endif %}
   </div>
   <div>
     {% if page < pages %}
-      <a href="?page={{ page + 1 }}{{ query_suffix }}" class="btn-secondary">Next &rarr;</a>
+      <a href="?page={{ page + 1 }}{{ query_suffix }}" class="btn-secondary">Next →</a>
     {% endif %}
   </div>
 </div>
+{% endblock %}
 
+{% block scripts %}
 {% raw %}
 <script>
+  function fmtSize(b) {
+    if (!b) return '—';
+    const units = ['B','KB','MB','GB','TB'];
+    let i = 0; let v = b;
+    while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+    return v.toFixed(v < 10 && i > 0 ? 2 : 1) + ' ' + units[i];
+  }
+
+  function openDetail(row) {
+    const d = JSON.parse(row.dataset.download);
+    const rows = Object.entries({
+      'Title': d.title,
+      'Author': d.author || '—',
+      'Year': d.year || '—',
+      'Profile': d.profile_slug,
+      'Source': d.source_id,
+      'Status': d.status,
+      'Download mode': d.download_mode,
+      'Torrent mode': d.torrent_mode,
+      'Size': fmtSize(d.size_bytes),
+      'Filename': d.filename || '—',
+      'Info hash': d.info_hash || '—',
+      'Started': d.started_at || '—',
+      'Completed': d.completed_at || '—',
+      'Failure reason': d.failure_reason || '—',
+    }).map(([k, v]) => `
+      <div class="grid grid-cols-[140px_1fr] gap-3 py-1.5 text-sm border-b border-gray-100 dark:border-gray-800 last:border-0">
+        <dt class="text-gray-500 dark:text-gray-400">${k}</dt>
+        <dd class="break-all font-mono text-xs">${v}</dd>
+      </div>`).join('');
+    showModal({
+      title: d.title,
+      wide: true,
+      html: `<div class="divide-y divide-gray-100 dark:divide-gray-800">${rows}</div>`,
+      actions: [
+        { label: 'Delete', class: 'btn-danger mr-auto',
+          onclick: async () => { await deleteDownload(d.id); return true; } },
+        { label: 'Close', class: 'btn-primary' },
+      ],
+    });
+  }
+
   async function deleteDownload(id) {
     const ok = await confirmModal({
-      title: 'Delete download?',
-      body: 'This removes the row AND the staged file on disk (if any). The Prowlarr/Bookshelf side is not affected.',
-      confirmLabel: 'Delete',
-      danger: true,
+      title: 'Delete this download?',
+      body: 'Removes the row AND the staged file on disk (if any). Prowlarr / Bookshelf state is not affected.',
+      confirmLabel: 'Delete', danger: true,
     });
     if (!ok) return;
     const r = await fetch(`/api/downloads/${id}`, {method: 'DELETE'});
     if (r.ok) { toast('Deleted', 'ok'); setTimeout(() => window.location.reload(), 400); }
     else toast('Delete failed: ' + await r.text(), 'err', 5000);
+  }
+
+  function openFilters() {
+    const current = new URLSearchParams(window.location.search);
+    const f = k => current.get(k) || '';
+    showModal({
+      title: 'Filter downloads',
+      html: `
+        <div class="space-y-3">
+          <div>
+            <label class="label">Status</label>
+            <select id="f-status" class="w-full">
+              <option value="">(any)</option>
+              ${['queued','resolving','downloading','verifying','ready','seeding','completed','failed']
+                .map(s => `<option value="${s}" ${f('status')===s?'selected':''}>${s}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label class="label">Source id</label>
+            <input id="f-source" class="w-full" value="${f('source')}" placeholder="anna_archive">
+          </div>
+          <div>
+            <label class="label">Profile slug</label>
+            <input id="f-profile" class="w-full" value="${f('profile')}" placeholder="ebooks_general">
+          </div>
+          <div>
+            <label class="label">Title / author contains</label>
+            <input id="f-q" class="w-full" value="${f('q')}">
+          </div>
+        </div>
+      `,
+      actions: [
+        { label: 'Reset', class: 'btn-ghost', onclick: () => { window.location.href = '/downloads'; } },
+        { label: 'Cancel', class: 'btn-ghost' },
+        { label: 'Apply', class: 'btn-primary', onclick: (panel) => {
+          const params = new URLSearchParams();
+          const s = panel.querySelector('#f-status').value;     if (s) params.set('status', s);
+          const src = panel.querySelector('#f-source').value.trim(); if (src) params.set('source', src);
+          const pr = panel.querySelector('#f-profile').value.trim(); if (pr) params.set('profile', pr);
+          const q = panel.querySelector('#f-q').value.trim();     if (q) params.set('q', q);
+          window.location.href = '/downloads' + (params.toString() ? '?' + params.toString() : '');
+        }},
+      ],
+    });
   }
 </script>
 {% endraw %}
