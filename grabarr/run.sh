@@ -32,7 +32,17 @@ if [ -n "${FLARESOLVERR_URL:-}" ]; then
 fi
 
 # Ensure the runtime dirs exist under the project root (not /data).
-mkdir -p data downloads/incoming downloads/ready
+mkdir -p data downloads/incoming downloads/ready data/shelfmark
+
+# Shelfmark's vendored env.py hardcodes /var/log/shelfmark. Redirect it
+# to our project-local data dir so we don't need root. Same for the
+# Shelfmark-side CONFIG_DIR / TMP_DIR / INGEST_DIR used by the internal
+# bypasser + recording.
+export LOG_ROOT="$(pwd)/data/shelfmark/log_root"
+export CONFIG_DIR="$(pwd)/data/shelfmark/config"
+export TMP_DIR="$(pwd)/data/shelfmark/tmp"
+export INGEST_DIR="$(pwd)/data/shelfmark/ingest"
+mkdir -p "$LOG_ROOT/shelfmark" "$CONFIG_DIR" "$TMP_DIR" "$INGEST_DIR"
 
 # First-run: write a minimal dev-focused config.yaml (relative paths).
 # config.example.yaml remains the reference for Docker deployments.
