@@ -10,6 +10,7 @@ later phase together with the download manager.
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 from email.utils import format_datetime
 from urllib.parse import quote
 from xml.sax.saxutils import escape as xml_escape
@@ -104,6 +105,19 @@ def _guid_for(profile_slug: str, external_id: str) -> str:
     return f"grabarr:{profile_slug}:{external_id}"
 
 
+def _pseudo_info_hash(profile_slug: str, source_id: str, external_id: str) -> str:
+    """Stable 40-char hex derived from (profile, source, external_id).
+
+    This is what we emit in the Torznab RSS ``infohash`` attr at search
+    time — before the real ``.torrent`` has been generated. It lets
+    Prowlarr dedup cross-indexer rows for the same item. The actual
+    info_hash inside the bencoded ``.torrent`` (set at grab time) is
+    different; Prowlarr doesn't verify the two match.
+    """
+    seed = f"{profile_slug}|{source_id}|{external_id}".encode()
+    return hashlib.sha1(seed, usedforsecurity=False).hexdigest()
+
+
 def _build_search_rss(
     profile: Profile,
     query: str,
@@ -150,8 +164,11 @@ def _build_search_rss(
             '      <torznab:attr name="peers" value="0"/>\n'
             '      <torznab:attr name="downloadvolumefactor" value="0"/>\n'
             '      <torznab:attr name="uploadvolumefactor" value="1"/>\n'
-            # Placeholder infohash — real one arrives with the torrent server.
-            f'      <torznab:attr name="infohash" value="{"0" * 40}"/>\n'
+            # Deterministic per-item pseudo-hash so Prowlarr accepts the
+            # row and dedups correctly. The real .torrent info_hash is
+            # computed lazily when the *arr client grabs the download;
+            # Prowlarr never inspects the .torrent bytes to verify this.
+            f'      <torznab:attr name="infohash" value="{_pseudo_info_hash(profile.slug, r.source_id, r.external_id)}"/>\n'
             + "\n".join(f"      {x}" for x in extras)
             + ("\n" if extras else "")
             + "    </item>"
