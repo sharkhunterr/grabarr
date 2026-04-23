@@ -26,6 +26,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         curl \
         libxml2-dev \
         libxslt-dev \
+        libtorrent-rasterbar-dev \
+        libboost-python-dev \
+        libboost-system-dev \
+        libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv.
@@ -71,6 +75,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libxml2 \
         libxslt1.1 \
+        libtorrent-rasterbar2.0 \
+        libboost-python1.83.0 \
+        libboost-system1.83.0 \
         ca-certificates \
         curl \
     && rm -rf /var/lib/apt/lists/* \
@@ -87,7 +94,7 @@ RUN mkdir -p /config /data /downloads/incoming /downloads/ready && \
 
 USER grabarr
 
-EXPOSE 8080
+EXPOSE 8080 45000-45100/tcp 45000-45100/udp
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
     CMD curl -fsS http://127.0.0.1:8080/healthz || exit 1

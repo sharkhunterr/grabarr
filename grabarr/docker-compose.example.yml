@@ -11,6 +11,10 @@ services:
     restart: unless-stopped
     ports:
       - "8080:8080"
+      # libtorrent listening ports for active_seed mode (Constitution Article IX).
+      # Your BitTorrent client connects to one of these to pull pieces.
+      - "45000-45100:45000-45100/tcp"
+      - "45000-45100:45000-45100/udp"
     volumes:
       - ./config:/config              # config.yaml lives here
       - ./data:/data                  # SQLite DB + future libtorrent session state
@@ -29,6 +33,10 @@ services:
       # GRABARR_SOURCES__ZLIBRARY__REMIX_USERKEY: "..."
       # Internet Archive contact email (REQUIRED by IA policy)
       GRABARR_IA_CONTACT_EMAIL: "you@example.com"
+      # Torrent mode: active_seed (default, requires libtorrent) | webseed
+      GRABARR_TORRENT_MODE: "active_seed"
+      GRABARR_TORRENT_LISTEN_PORT_MIN: "45000"
+      GRABARR_TORRENT_LISTEN_PORT_MAX: "45100"
     networks:
       - grabarr_net
     depends_on:

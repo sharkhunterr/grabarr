@@ -33,7 +33,7 @@ from grabarr.downloads.sync import SyncDownloadFailed, sync_download
 from grabarr.profiles.models import Profile
 from grabarr.profiles.service import get_adapter_instance
 from grabarr.torrents.models import Torrent
-from grabarr.torrents.webseed import TorrentBlob, build_webseed_torrent
+from grabarr.torrents.server import GeneratedTorrent, generate_torrent
 
 _log = setup_logger(__name__)
 
@@ -91,26 +91,39 @@ async def prepare_and_generate_torrent(
     token: str,
     host_base_url: str,
     tracker_port: int,
-) -> TorrentBlob:
+) -> GeneratedTorrent:
     """Main flow invoked from ``/torznab/{slug}/download/{token}.torrent``.
 
     ``host_base_url`` is like ``http://1.2.3.4:8080`` and is used to
-    construct the webseed URL the .torrent references. ``tracker_port``
-    is the internal tracker's port (default 8999) for the announce URL.
+    construct the webseed URL the .torrent references (for webseed
+    mode). ``tracker_port`` is the internal tracker's port for the
+    announce URL.
     """
-    # 1. Load the pending row.
+    # 1. Load the pending row and determine the per-profile torrent mode.
     async with session_scope() as session:
         row = await session.execute(select(Download).where(Download.token == token))
         dl = row.scalar_one_or_none()
         if dl is None:
             raise DownloadNotFound(token)
         if dl.status == DownloadStatus.SEEDING.value and dl.info_hash and dl.file_path:
-            # Already prepared — regenerate the torrent blob for re-serving.
-            return _rebuild_blob(dl, host_base_url, tracker_port)
+            return _rebuild_blob(dl, slug, host_base_url, tracker_port)
         media_type = MediaType(dl.media_type)
         external_id = dl.external_id
         source_id = dl.source_id
         profile_slug = slug
+        # Resolve torrent mode: profile override → settings default → webseed.
+        profile_row = await session.execute(
+            select(Profile).where(Profile.slug == slug)
+        )
+        profile = profile_row.scalar_one()
+        torrent_mode_str = (
+            profile.torrent_mode_override
+            or _resolve_default_torrent_mode()
+        )
+        try:
+            torrent_mode = TorrentMode(torrent_mode_str)
+        except ValueError:
+            torrent_mode = TorrentMode.WEBSEED
 
     adapter = get_adapter_instance(source_id)
     if adapter is None:
@@ -140,13 +153,12 @@ async def prepare_and_generate_torrent(
         await _mark_failed(token, f"download failed: {exc}")
         raise
 
-    # 4. Build webseed torrent.
+    # 4. Build torrent via the mode dispatcher.
     await _set_status(token, DownloadStatus.VERIFYING)
     webseed_url = f"{host_base_url}/torznab/{profile_slug}/seed/{token}"
-    # Tracker shares the main HTTP server for the MVP; in a Docker
-    # deployment it will move to its own port.
     announce_url = f"{host_base_url}/announce"
-    blob = build_webseed_torrent(
+    blob = generate_torrent(
+        mode=torrent_mode,
         file_path=final_path,
         announce_url=announce_url,
         webseed_url=webseed_url,
@@ -164,6 +176,7 @@ async def prepare_and_generate_torrent(
         dl.magic_verified = report.passed
         dl.file_path = str(final_path)
         dl.info_hash = blob.info_hash
+        dl.torrent_mode = blob.mode.value
         dl.status = DownloadStatus.SEEDING.value
         dl.resolved_at = now
         dl.ready_at = now
@@ -173,11 +186,11 @@ async def prepare_and_generate_torrent(
             Torrent(
                 info_hash=blob.info_hash,
                 download_id=dl.id,
-                mode=TorrentMode.WEBSEED.value,
+                mode=blob.mode.value,
                 total_size_bytes=size_bytes,
                 piece_size_bytes=blob.piece_size,
                 piece_count=blob.piece_count,
-                webseed_url=webseed_url,
+                webseed_url=webseed_url if blob.mode == TorrentMode.WEBSEED else None,
                 generated_at=now,
                 expires_at=now + dt.timedelta(hours=24),
             )
@@ -216,19 +229,33 @@ def _host(base_url: str) -> str:
     return clean
 
 
-def _rebuild_blob(dl: Download, host_base_url: str, tracker_port: int) -> TorrentBlob:
+def _rebuild_blob(
+    dl: Download, slug: str, host_base_url: str, tracker_port: int
+) -> GeneratedTorrent:
     """Re-emit the torrent blob for an already-prepared download."""
     path = Path(dl.file_path) if dl.file_path else None
     if path is None or not path.exists():
         raise DownloadNotFound(f"file no longer on disk for token {dl.token}")
-    webseed_url = f"{host_base_url}/torznab/{dl.profile_id}/seed/{dl.token}"  # slug not known here; close enough
-    announce_url = f"{_host(host_base_url)}:{tracker_port}/announce"
-    return build_webseed_torrent(
+    webseed_url = f"{host_base_url}/torznab/{slug}/seed/{dl.token}"
+    announce_url = f"{host_base_url}/announce"
+    try:
+        mode = TorrentMode(dl.torrent_mode)
+    except ValueError:
+        mode = TorrentMode.WEBSEED
+    return generate_torrent(
+        mode=mode,
         file_path=path,
         announce_url=announce_url,
         webseed_url=webseed_url,
         display_name=path.name,
     )
+
+
+def _resolve_default_torrent_mode() -> str:
+    """Read the default torrent mode from env (future: settings table)."""
+    import os
+
+    return os.environ.get("GRABARR_TORRENT_MODE", TorrentMode.ACTIVE_SEED.value)
 
 
 async def _set_status(token: str, status: DownloadStatus) -> None:

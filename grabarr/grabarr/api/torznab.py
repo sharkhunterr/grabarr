@@ -277,7 +277,9 @@ async def torznab_download(slug: str, token_ext: str, request: Request) -> Respo
         headers={
             "Content-Disposition": f'attachment; filename="grabarr-{token[:10]}.torrent"',
             "X-Grabarr-Info-Hash": blob.info_hash,
-            "X-Grabarr-Torrent-Mode": "webseed",
+            "X-Grabarr-Torrent-Mode": blob.mode.value,
+            "X-Grabarr-Piece-Count": str(blob.piece_count),
+            "X-Grabarr-Piece-Size": str(blob.piece_size),
         },
     )
 

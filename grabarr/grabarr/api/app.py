@@ -128,6 +128,13 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     yield
 
     _log.info("Grabarr shutting down")
+    # Persist libtorrent session state if the active-seed server was booted.
+    try:
+        from grabarr.torrents.active_seed import shutdown_active_seed_server
+
+        shutdown_active_seed_server()
+    except Exception as exc:  # noqa: BLE001
+        _log.warning("libtorrent shutdown failed: %s", exc)
     await close_engine()
 
 

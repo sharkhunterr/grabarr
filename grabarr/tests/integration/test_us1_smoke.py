@@ -62,6 +62,9 @@ def app_client(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("GRABARR_SERVER__DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("GRABARR_SERVER__DOWNLOADS_DIR", str(tmp_path / "downloads"))
+    # Default these tests to webseed so the BEP-19 url-list assertions hold.
+    # The active_seed path is covered by tests/unit/test_torrent_modes.py.
+    monkeypatch.setenv("GRABARR_TORRENT_MODE", "webseed")
     (tmp_path / "data").mkdir()
     (tmp_path / "downloads" / "incoming").mkdir(parents=True)
     (tmp_path / "downloads" / "ready").mkdir(parents=True)
