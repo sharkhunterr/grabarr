@@ -120,4 +120,4 @@ def test_notifications_ui_renders(app_client: TestClient) -> None:
     r = app_client.get("/notifications")
     assert r.status_code == 200
     assert "Notifications" in r.text
-    assert "Apprise URLs" in r.text
+    assert "Apprise destinations" in r.text
