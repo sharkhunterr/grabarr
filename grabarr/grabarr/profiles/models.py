@@ -31,6 +31,10 @@ class Profile(Base):
     torrent_mode_override: Mapped[str | None] = mapped_column(String(32), nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     api_key_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    # Plaintext API key — stored so the UI can re-display it without forcing
+    # a rotation on every visit. Bcrypt hash above is kept for the fast
+    # constant-time check against Torznab ?apikey=... requests.
+    api_key_plain: Mapped[str | None] = mapped_column(String(128), nullable=True)
     is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[dt.datetime] = mapped_column(
         nullable=False, default=lambda: dt.datetime.now(dt.UTC)

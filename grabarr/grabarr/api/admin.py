@@ -29,6 +29,7 @@ from grabarr.profiles.service import (
     create_profile,
     delete_profile,
     duplicate_profile,
+    get_or_mint_api_key,
     get_profile_by_slug,
     list_profiles,
     regenerate_api_key,
@@ -608,7 +609,7 @@ async def api_prowlarr_config(
     except ProfileNotFound:
         raise HTTPException(status_code=404, detail=f"profile '{profile}' not found") from None
 
-    plaintext = await regenerate_api_key(profile)
+    plaintext = await get_or_mint_api_key(profile)
     host = f"{request.url.scheme}://{request.url.netloc}"
 
     blob = {

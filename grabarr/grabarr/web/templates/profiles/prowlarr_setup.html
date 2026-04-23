@@ -1,0 +1,141 @@
+{% extends "_base.html" %}
+{% block title %}Prowlarr setup · {{ profile.name }} · Grabarr{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+  <a href="/profiles" class="text-sm text-indigo-600 hover:underline dark:text-indigo-400">&larr; Back to profiles</a>
+</div>
+
+<h1 class="text-2xl font-bold mb-2">Prowlarr setup — {{ profile.name }}</h1>
+<p class="text-sm text-gray-600 dark:text-gray-400 mb-6">
+  Open Prowlarr → <strong>Indexers</strong> → <strong>Add Indexer</strong> → <strong>Generic Torznab</strong>,
+  then paste each value below into the matching field.
+</p>
+
+<div class="card bg-blue-50 border-blue-200 dark:bg-blue-900/30 dark:border-blue-900 mb-6">
+  <div class="flex items-start gap-3">
+    <svg class="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+      <path d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+    </svg>
+    <div class="text-sm">
+      <strong>API key is stable.</strong>
+      It stays the same across visits — copy it once, paste into Prowlarr, done.
+      The key only rotates when you click <em>Regenerate key</em> below (or
+      <em>Regenerate API key</em> on the profile-edit page).
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2 class="text-lg font-semibold mb-4">Copy these into Prowlarr</h2>
+
+  <div class="space-y-4">
+    <div>
+      <div class="flex items-center justify-between text-xs uppercase text-gray-500 dark:text-gray-400">
+        <span>Name</span>
+        <button class="btn-ghost text-xs" onclick="copyVal(this, '{{ name | e }}')">Copy</button>
+      </div>
+      <input readonly value="{{ name }}" class="input mt-1 font-mono" onclick="this.select()">
+    </div>
+
+    <div>
+      <div class="flex items-center justify-between text-xs uppercase text-gray-500 dark:text-gray-400">
+        <span>URL</span>
+        <button class="btn-ghost text-xs" onclick="copyVal(this, '{{ base_url }}/')">Copy</button>
+      </div>
+      <input readonly value="{{ base_url }}/" class="input mt-1 font-mono" onclick="this.select()">
+    </div>
+
+    <div>
+      <div class="flex items-center justify-between text-xs uppercase text-gray-500 dark:text-gray-400">
+        <span>API Path</span>
+        <button class="btn-ghost text-xs" onclick="copyVal(this, '/api')">Copy</button>
+      </div>
+      <input readonly value="/api" class="input mt-1 font-mono" onclick="this.select()">
+    </div>
+
+    <div>
+      <div class="flex items-center justify-between text-xs uppercase text-gray-500 dark:text-gray-400">
+        <span>API Key</span>
+        <button class="btn-primary text-xs" onclick="copyVal(this, '{{ api_key }}')">Copy</button>
+      </div>
+      <input readonly value="{{ api_key }}" class="input mt-1 font-mono bg-indigo-50 dark:bg-indigo-900/30"
+             onclick="this.select()">
+      <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+        {{ api_key | length }} chars. Treat as a password.
+      </p>
+    </div>
+
+    <div>
+      <div class="flex items-center justify-between text-xs uppercase text-gray-500 dark:text-gray-400">
+        <span>Categories</span>
+        <button class="btn-ghost text-xs" onclick="copyVal(this, {{ profile.newznab_categories | join(',') | tojson }})">Copy</button>
+      </div>
+      <input readonly value="{{ profile.newznab_categories | join(', ') }}" class="input mt-1 font-mono" onclick="this.select()">
+      <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+        Newznab codes. In Prowlarr's form these are picked from the dropdown —
+        select every id in this list.
+      </p>
+    </div>
+
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <div class="text-xs uppercase text-gray-500 dark:text-gray-400">Minimum Seeders</div>
+        <input readonly value="1" class="input mt-1 font-mono" onclick="this.select()">
+      </div>
+      <div>
+        <div class="text-xs uppercase text-gray-500 dark:text-gray-400">Protocol</div>
+        <input readonly value="torrent" class="input mt-1 font-mono" onclick="this.select()">
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mt-6 card">
+  <h2 class="text-lg font-semibold mb-3">Actions</h2>
+  <div class="flex flex-wrap gap-3">
+    <a href="/api/prowlarr-config?profile={{ profile.slug }}"
+       download="grabarr-{{ profile.slug }}.json"
+       class="btn-secondary">
+      Download JSON (for Prowlarr API import)
+    </a>
+    <button class="btn-ghost"
+            onclick="regenerateKey()">
+      Regenerate key
+    </button>
+    <a href="/profiles" class="btn-ghost">Back to profiles</a>
+  </div>
+  <script>
+    async function regenerateKey() {
+      if (!confirm('Generate a new API key? The current one above will stop working immediately.')) return;
+      const r = await fetch('/api/profiles/{{ profile.slug }}/regenerate-key', {method: 'POST'});
+      if (!r.ok) { alert('Regenerate failed: ' + await r.text()); return; }
+      window.location.reload();
+    }
+  </script>
+</div>
+
+<div class="mt-6 card">
+  <h2 class="text-lg font-semibold mb-3">Test from the terminal (optional)</h2>
+  <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
+    If you prefer to verify from a shell before adding to Prowlarr:
+  </p>
+  <pre class="text-xs overflow-x-auto rounded bg-gray-100 p-3 dark:bg-gray-800"><code># caps (no auth needed)
+curl -sS "{{ base_url }}/api?t=caps"
+
+# search (needs the key)
+curl -sS "{{ base_url }}/api?t=search&q=foundation&apikey={{ api_key }}&limit=3"</code></pre>
+</div>
+
+{% raw %}
+<script>
+  function copyVal(btn, val) {
+    navigator.clipboard.writeText(val).then(() => {
+      const orig = btn.textContent;
+      btn.textContent = 'Copied ✓';
+      setTimeout(() => btn.textContent = orig, 1200);
+    });
+  }
+</script>
+{% endraw %}
+{% endblock %}

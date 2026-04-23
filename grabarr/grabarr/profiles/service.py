@@ -64,7 +64,7 @@ async def verify_api_key(slug: str, plaintext: str) -> bool:
 
 
 async def regenerate_api_key(slug: str) -> str:
-    """Mint a fresh API key. Return the one-time plaintext."""
+    """Mint a fresh API key. Invalidates the previous one immediately."""
     plaintext = secrets.token_urlsafe(32)
     digest = bcrypt.hashpw(plaintext.encode(), bcrypt.gensalt(rounds=10)).decode()
     async with session_scope() as session:
@@ -73,7 +73,29 @@ async def regenerate_api_key(slug: str) -> str:
         if obj is None:
             raise ProfileNotFound(slug)
         obj.api_key_hash = digest
+        obj.api_key_plain = plaintext
     return plaintext
+
+
+async def get_or_mint_api_key(slug: str) -> str:
+    """Return the current plaintext key, minting one only if missing.
+
+    Unlike :func:`regenerate_api_key`, this NEVER rotates an existing
+    key — it's safe to call on every page load.
+    """
+    async with session_scope() as session:
+        row = await session.execute(select(Profile).where(Profile.slug == slug))
+        obj = row.scalar_one_or_none()
+        if obj is None:
+            raise ProfileNotFound(slug)
+        if obj.api_key_plain:
+            return obj.api_key_plain
+        # Migrated or legacy row without plaintext — mint one now.
+        plaintext = secrets.token_urlsafe(32)
+        digest = bcrypt.hashpw(plaintext.encode(), bcrypt.gensalt(rounds=10)).decode()
+        obj.api_key_hash = digest
+        obj.api_key_plain = plaintext
+        return plaintext
 
 
 async def create_profile(payload: dict[str, Any]) -> tuple[Profile, str]:
@@ -94,6 +116,7 @@ async def create_profile(payload: dict[str, Any]) -> tuple[Profile, str]:
             torrent_mode_override=payload.get("torrent_mode_override"),
             enabled=payload.get("enabled", True),
             api_key_hash=digest,
+            api_key_plain=plaintext,
             is_default=False,
         )
         session.add(profile)
@@ -175,6 +198,7 @@ async def duplicate_profile(slug: str, new_slug: str) -> tuple[Profile, str]:
             torrent_mode_override=src.torrent_mode_override,
             enabled=True,
             api_key_hash=digest,
+            api_key_plain=plaintext,
             is_default=False,
         )
         session.add(copy)

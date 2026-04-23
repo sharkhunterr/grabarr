@@ -52,10 +52,9 @@
     </div>
 
     <div class="mt-auto flex flex-wrap gap-2 pt-4">
-      <a href="/api/prowlarr-config?profile={{ p.slug }}"
-         class="btn-primary flex-1"
-         download="grabarr-{{ p.slug }}.json">
-        Copy Prowlarr Config
+      <a href="/profiles/{{ p.slug }}/prowlarr-setup"
+         class="btn-primary flex-1">
+        Setup in Prowlarr
       </a>
       <a href="/profiles/{{ p.slug }}/edit" class="btn-secondary">Edit</a>
       <button type="button"

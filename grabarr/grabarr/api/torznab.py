@@ -221,8 +221,22 @@ async def torznab_api(
         # Fold supplementary fields into the search query.
         extra_terms = " ".join(x for x in (author, title, artist, album) if x)
         composite_q = " ".join(x for x in (q, extra_terms) if x).strip()
+        # On empty query (Prowlarr's test + RSS feed probe), return a
+        # representative sample per media type so clients see the feed
+        # is alive. Bookshelf / Readarr always send a real query so
+        # this path only affects Prowlarr's add-indexer test.
         if not composite_q:
-            return _xml_response(_build_search_rss(profile, "", [], base_url))
+            composite_q = {
+                "ebook": "bestseller",
+                "audiobook": "audiobook",
+                "comic": "comic",
+                "magazine": "magazine",
+                "music": "album",
+                "software": "software",
+                "paper": "paper",
+                "game_rom": "game",
+                "video": "video",
+            }.get(profile.media_type, "popular")
         try:
             results = await orchestrate_search(profile, composite_q, limit=limit)
         except Exception as exc:

@@ -210,6 +210,36 @@ async def notifications_page(request: Request) -> HTMLResponse:
     )
 
 
+@router.get("/profiles/{slug}/prowlarr-setup", response_class=HTMLResponse)
+async def profile_prowlarr_setup(slug: str, request: Request) -> HTMLResponse:
+    """Per-profile Prowlarr-setup page — all fields + key in one place."""
+    from fastapi import HTTPException
+
+    from grabarr.profiles.service import (
+        ProfileNotFound,
+        get_or_mint_api_key,
+        get_profile_by_slug,
+    )
+
+    try:
+        profile = await get_profile_by_slug(slug)
+    except ProfileNotFound:
+        raise HTTPException(status_code=404, detail=f"profile '{slug}' not found") from None
+    # get_or_mint reads the stored plaintext; NO rotation on visit.
+    api_key = await get_or_mint_api_key(slug)
+    base_url = f"{request.url.scheme}://{request.url.netloc}/torznab/{slug}"
+    return templates.TemplateResponse(
+        request,
+        "profiles/prowlarr_setup.html",
+        {
+            "profile": profile,
+            "api_key": api_key,
+            "base_url": base_url,
+            "name": f"Grabarr — {profile.name}",
+        },
+    )
+
+
 @router.get("/profiles/{slug}/edit", response_class=HTMLResponse)
 async def profile_edit(slug: str, request: Request) -> HTMLResponse:
     """Edit form for an existing profile."""

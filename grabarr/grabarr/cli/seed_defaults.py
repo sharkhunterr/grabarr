@@ -59,6 +59,7 @@ async def seed_defaults() -> list[str]:
                     torrent_mode_override=None,
                     enabled=True,
                     api_key_hash=digest,
+                    api_key_plain=plaintext,
                     is_default=True,
                 )
             )
