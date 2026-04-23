@@ -49,9 +49,13 @@ class ShelfmarkConfigProxy:
         "AA_DONATOR_KEY": "",
         "USE_CF_BYPASS": True,
         "CUSTOM_SCRIPT": "",
-        # URL templates — Shelfmark builds these from mirrors at runtime
-        # unless overridden.
-        "AA_BASE_URL": "https://annas-archive.org",
+        # NOTE: AA_BASE_URL is intentionally NOT defaulted here. Letting
+        # it default to a specific domain would override the vendored
+        # mirror-selection logic in `core/mirrors.py` and peg Grabarr
+        # to a dead domain (e.g. if annas-archive.org stops resolving).
+        # Shelfmark's network layer iterates DEFAULT_AA_MIRRORS
+        # (.gl, .pk, .vg, .gd) and falls through to the first that
+        # responds.
         # Cascade retry / timing knobs (Shelfmark defaults, copied
         # verbatim from upstream env defaults so behaviour matches a
         # fresh Shelfmark install).

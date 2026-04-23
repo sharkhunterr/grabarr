@@ -41,10 +41,38 @@ def _database_url() -> str:
 
 
 def get_engine() -> AsyncEngine:
-    """Return the process-wide ``AsyncEngine``, creating on first call."""
+    """Return the process-wide ``AsyncEngine``, creating on first call.
+
+    Enables SQLite WAL mode + busy_timeout=5s + 10s connection timeout
+    so concurrent requests from Prowlarr + the background health monitor
+    + cleanup sweeper don't trip ``OperationalError: database is locked``.
+    """
     global _engine
     if _engine is None:
-        _engine = create_async_engine(_database_url(), pool_pre_ping=True, future=True)
+        from sqlalchemy import event
+
+        _engine = create_async_engine(
+            _database_url(),
+            pool_pre_ping=True,
+            future=True,
+            connect_args={"timeout": 10},
+        )
+
+        # Run PRAGMAs on every new connection via SQLAlchemy's sync event
+        # (aiosqlite wraps sync sqlite3 under the hood).
+        sync_engine = _engine.sync_engine
+
+        @event.listens_for(sync_engine, "connect")
+        def _sqlite_pragmas(dbapi_conn, _record):
+            cur = dbapi_conn.cursor()
+            try:
+                cur.execute("PRAGMA journal_mode=WAL")
+                cur.execute("PRAGMA synchronous=NORMAL")
+                cur.execute("PRAGMA busy_timeout=5000")
+                cur.execute("PRAGMA foreign_keys=ON")
+            finally:
+                cur.close()
+
     return _engine
 
 
