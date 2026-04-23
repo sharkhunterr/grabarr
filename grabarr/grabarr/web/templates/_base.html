@@ -4,76 +4,244 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}Grabarr{% endblock %}</title>
-  <!-- MVP uses the Tailwind Play CDN; production Docker build compiles
-       via the Tailwind CLI to grabarr/web/static/css/tailwind.build.css. -->
   <script src="https://cdn.tailwindcss.com"></script>
   {% raw %}
   <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: { extend: {} },
-    };
-  </script>
-  <style type="text/tailwindcss">
-    @layer components {
-      .btn { @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50; }
-      .btn-primary { @apply btn bg-indigo-600 text-white hover:bg-indigo-700 focus:ring-indigo-500; }
-      .btn-secondary { @apply btn bg-gray-200 text-gray-900 hover:bg-gray-300 focus:ring-gray-500 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600; }
-      .btn-ghost { @apply btn bg-transparent text-gray-700 hover:bg-gray-100 focus:ring-gray-500 dark:text-gray-300 dark:hover:bg-gray-800; }
-      .card { @apply rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800; }
-      .badge { @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium; }
-      .badge-neutral { @apply badge bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200; }
-      .badge-success { @apply badge bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200; }
-      .badge-warning { @apply badge bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200; }
-      .badge-error   { @apply badge bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200; }
-    }
-  </style>
-  {% endraw %}
-  <script>
-    // Apply theme before paint to avoid flash.
     (function () {
       const saved = localStorage.getItem('theme');
       const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
       const theme = saved || (prefersDark ? 'dark' : 'light');
       if (theme === 'dark') document.documentElement.classList.add('dark');
     })();
+    tailwind.config = {
+      darkMode: 'class',
+      theme: { extend: { colors: {
+        brand: { 50:'#eef2ff', 100:'#e0e7ff', 500:'#6366f1', 600:'#4f46e5', 700:'#4338ca' },
+      }}},
+    };
   </script>
+  <style type="text/tailwindcss">
+    @layer base {
+      body { @apply bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100; }
+      input, select, textarea {
+        @apply rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm
+               placeholder:text-gray-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20
+               focus:outline-none transition
+               dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500;
+      }
+      input[type="checkbox"] { @apply h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500/30; }
+      :focus-visible { outline: 2px solid theme('colors.brand.500'); outline-offset: 2px; }
+    }
+    @layer components {
+      .btn { @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium
+             transition focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white
+             dark:focus:ring-offset-gray-950 disabled:cursor-not-allowed disabled:opacity-50; }
+      .btn-primary { @apply btn bg-brand-600 text-white hover:bg-brand-700 focus:ring-brand-500 shadow-sm; }
+      .btn-secondary { @apply btn bg-gray-100 text-gray-900 hover:bg-gray-200 focus:ring-gray-400
+                       dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700; }
+      .btn-danger { @apply btn bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 shadow-sm; }
+      .btn-ghost { @apply btn bg-transparent text-gray-600 hover:bg-gray-100 focus:ring-gray-400
+                   dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100; }
+      .btn-sm { @apply px-3 py-1.5 text-xs; }
+
+      .card { @apply rounded-xl border border-gray-200 bg-white shadow-sm
+              dark:border-gray-800 dark:bg-gray-900 transition; }
+      .card-body { @apply p-5; }
+      .card-hover { @apply hover:shadow-md hover:border-gray-300 dark:hover:border-gray-700; }
+
+      .label { @apply mb-1 block text-xs font-medium uppercase tracking-wide text-gray-600 dark:text-gray-400; }
+
+      .badge { @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium; }
+      .badge-neutral { @apply badge bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300; }
+      .badge-brand { @apply badge bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-100; }
+      .badge-success { @apply badge bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300; }
+      .badge-warning { @apply badge bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300; }
+      .badge-error { @apply badge bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300; }
+
+      .health-dot { @apply inline-block h-2.5 w-2.5 rounded-full ring-4; }
+      .health-ok { @apply bg-emerald-500 ring-emerald-500/20; }
+      .health-warn { @apply bg-amber-500 ring-amber-500/20; }
+      .health-bad { @apply bg-red-500 ring-red-500/20; }
+      .health-idle { @apply bg-gray-400 ring-gray-400/20; }
+
+      .page-title { @apply text-2xl font-bold tracking-tight; }
+      .page-subtitle { @apply mt-1 text-sm text-gray-600 dark:text-gray-400; }
+
+      .toast { @apply pointer-events-auto min-w-[240px] max-w-md rounded-lg px-4 py-3 shadow-lg text-sm font-medium; }
+      .toast-ok { @apply toast bg-emerald-600 text-white; }
+      .toast-warn { @apply toast bg-amber-500 text-white; }
+      .toast-err { @apply toast bg-red-600 text-white; }
+      .toast-info { @apply toast bg-gray-800 text-white dark:bg-gray-700; }
+
+      .modal-overlay { @apply fixed inset-0 z-40 flex items-center justify-center
+                       bg-black/50 backdrop-blur-sm p-4; }
+      .modal-panel { @apply relative w-full max-w-lg rounded-xl bg-white shadow-2xl
+                     dark:bg-gray-900 border border-gray-200 dark:border-gray-800; }
+      .modal-wide { @apply max-w-3xl; }
+    }
+  </style>
+  {% endraw %}
 </head>
-<body class="h-full bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100 antialiased">
-  <header class="sticky top-0 z-20 border-b border-gray-200 bg-white/90 backdrop-blur dark:border-gray-700 dark:bg-gray-900/90">
-    <div class="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
-      <a href="/" class="flex items-center gap-2 text-lg font-semibold">
-        <span class="inline-flex h-8 w-8 items-center justify-center rounded-md bg-indigo-600 text-white">G</span>
-        <span>Grabarr</span>
+<body class="h-full antialiased">
+
+  <header class="sticky top-0 z-30 border-b border-gray-200 bg-white/80 backdrop-blur
+                 dark:border-gray-800 dark:bg-gray-950/80">
+    <div class="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between gap-4">
+      <a href="/" class="flex items-center gap-2 shrink-0">
+        <span class="inline-flex h-9 w-9 items-center justify-center rounded-lg
+                     bg-gradient-to-br from-brand-500 to-brand-700 text-white font-bold shadow-sm">G</span>
+        <span class="text-lg font-semibold tracking-tight">Grabarr</span>
       </a>
-      <nav class="hidden md:flex items-center gap-4 text-sm">
-        <a href="/" class="hover:text-indigo-600 dark:hover:text-indigo-400">Dashboard</a>
-        <a href="/profiles" class="hover:text-indigo-600 dark:hover:text-indigo-400">Profiles</a>
-        <a href="/sources" class="hover:text-indigo-600 dark:hover:text-indigo-400">Sources</a>
-        <a href="/downloads" class="hover:text-indigo-600 dark:hover:text-indigo-400">Downloads</a>
-        <a href="/stats" class="hover:text-indigo-600 dark:hover:text-indigo-400">Stats</a>
-        <a href="/notifications" class="hover:text-indigo-600 dark:hover:text-indigo-400">Notifications</a>
-        <a href="/settings" class="hover:text-indigo-600 dark:hover:text-indigo-400">Settings</a>
+
+      {% set nav_items = [
+        ('/', 'Dashboard'),
+        ('/profiles', 'Profiles'),
+        ('/sources', 'Sources'),
+        ('/downloads', 'Downloads'),
+        ('/stats', 'Stats'),
+        ('/notifications', 'Notifications'),
+        ('/health', 'Health'),
+        ('/settings', 'Settings')
+      ] %}
+
+      <nav class="hidden lg:flex items-center gap-1 text-sm">
+        {% for href, label in nav_items %}
+        <a href="{{ href }}"
+           class="rounded-md px-3 py-2 font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100
+                  dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-800 transition">{{ label }}</a>
+        {% endfor %}
       </nav>
-      <button id="theme-toggle"
-              class="btn-ghost"
-              aria-label="Toggle dark mode"
-              onclick="
-                document.documentElement.classList.toggle('dark');
-                localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
-              ">
-        <svg class="h-4 w-4 dark:hidden" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/></svg>
-        <svg class="h-4 w-4 hidden dark:block" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zM10 16a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 4.636a1 1 0 011.414 0l.707.707a1 1 0 01-1.414 1.414l-.707-.707a1 1 0 010-1.414zM13.536 13.536a1 1 0 011.414 0l.707.707a1 1 0 01-1.414 1.414l-.707-.707a1 1 0 010-1.414zM3 10a1 1 0 011-1h1a1 1 0 110 2H4a1 1 0 01-1-1zM16 10a1 1 0 011-1h1a1 1 0 110 2h-1a1 1 0 01-1-1zM5.05 15.364a1 1 0 010-1.414l.707-.707a1 1 0 011.414 1.414l-.707.707a1 1 0 01-1.414 0zM13.536 6.464a1 1 0 010-1.414l.707-.707a1 1 0 011.414 1.414l-.707.707a1 1 0 01-1.414 0zM10 6a4 4 0 100 8 4 4 0 000-8z"/></svg>
-      </button>
+
+      <div class="flex items-center gap-2">
+        <button class="btn-ghost btn-sm" aria-label="Toggle theme" onclick="toggleTheme()">
+          <svg class="h-5 w-5 dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/>
+          </svg>
+          <svg class="h-5 w-5 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+          </svg>
+        </button>
+        <button class="btn-ghost btn-sm lg:hidden" aria-label="Open menu" onclick="toggleMobileNav()">
+          <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <div id="mobile-nav" class="hidden lg:hidden border-t border-gray-200 dark:border-gray-800">
+      <nav class="mx-auto max-w-7xl px-2 py-2 flex flex-col">
+        {% for href, label in nav_items %}
+          <a href="{{ href }}"
+             class="rounded-md px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-100
+                    dark:text-gray-200 dark:hover:bg-gray-800">{{ label }}</a>
+        {% endfor %}
+      </nav>
     </div>
   </header>
 
-  <main class="mx-auto max-w-7xl px-4 py-6">
+  <main class="mx-auto max-w-7xl px-4 py-6 md:py-8">
     {% block content %}{% endblock %}
   </main>
 
-  <footer class="mt-12 border-t border-gray-200 bg-white py-4 text-center text-xs text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
-    Grabarr v{{ version | default('1.0.0') }} · served behind your own reverse proxy
+  <footer class="mt-12 border-t border-gray-200 dark:border-gray-800 py-6
+                 text-center text-xs text-gray-500 dark:text-gray-400">
+    Grabarr v{{ version | default('1.0.0') }}
+    · <a href="/healthz" class="hover:underline">healthz</a>
+    · <a href="/metrics" class="hover:underline">metrics</a>
   </footer>
+
+  <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+  <div id="modal-root"></div>
+
+  {% raw %}
+  <script>
+    function toggleTheme() {
+      document.documentElement.classList.toggle('dark');
+      localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
+    }
+    function toggleMobileNav() {
+      document.getElementById('mobile-nav').classList.toggle('hidden');
+    }
+    function toast(msg, kind='info', ms=3000) {
+      const el = document.createElement('div');
+      el.className = {ok:'toast-ok',warn:'toast-warn',err:'toast-err',info:'toast-info'}[kind] || 'toast-info';
+      el.textContent = msg;
+      document.getElementById('toast-container').appendChild(el);
+      setTimeout(() => { el.style.opacity='0'; el.style.transition='opacity 200ms'; setTimeout(()=>el.remove(),200); }, ms);
+    }
+    function showModal({title, html, actions=[], wide=false}) {
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-overlay';
+      overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+      const onEsc = e => { if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', onEsc); } };
+      document.addEventListener('keydown', onEsc);
+
+      const panel = document.createElement('div');
+      panel.className = 'modal-panel' + (wide ? ' modal-wide' : '');
+      const actionsHtml = actions.map((a,i) =>
+        `<button data-action-idx="${i}" class="${a.class || 'btn-secondary'}">${a.label}</button>`
+      ).join('');
+      panel.innerHTML = `
+        <div class="flex items-center justify-between border-b border-gray-200 dark:border-gray-800 px-5 py-4">
+          <h3 class="text-lg font-semibold">${title}</h3>
+          <button class="btn-ghost btn-sm" aria-label="Close" data-close="1">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <div class="px-5 py-4 max-h-[70vh] overflow-y-auto">${html}</div>
+        ${actions.length ? `<div class="flex justify-end gap-2 border-t border-gray-200 dark:border-gray-800 px-5 py-3">${actionsHtml}</div>` : ''}
+      `;
+      overlay.appendChild(panel);
+      document.getElementById('modal-root').appendChild(overlay);
+      panel.querySelector('[data-close]').addEventListener('click', () => overlay.remove());
+      actions.forEach((a, i) => {
+        panel.querySelector(`[data-action-idx="${i}"]`).addEventListener('click', async () => {
+          const res = a.onclick ? await a.onclick(panel, overlay) : null;
+          if (res !== false) overlay.remove();
+        });
+      });
+      setTimeout(() => { const first = panel.querySelector('input,textarea,select'); if (first) first.focus(); }, 50);
+      return { panel, overlay, close: () => overlay.remove() };
+    }
+    function confirmModal({title='Confirm', body, confirmLabel='Confirm', danger=false}) {
+      return new Promise((resolve) => {
+        showModal({
+          title,
+          html: `<p class="text-sm text-gray-600 dark:text-gray-400">${body}</p>`,
+          actions: [
+            { label: 'Cancel', class: 'btn-ghost', onclick: () => resolve(false) },
+            { label: confirmLabel, class: danger ? 'btn-danger' : 'btn-primary',
+              onclick: () => resolve(true) },
+          ],
+        });
+      });
+    }
+    function promptModal({title='Input', body='', defaultValue='', placeholder='', confirmLabel='OK'}) {
+      return new Promise((resolve) => {
+        showModal({
+          title,
+          html: `
+            <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">${body}</p>
+            <input type="text" id="__prompt_input" class="w-full"
+                   value="${(defaultValue || '').replace(/"/g, '&quot;')}"
+                   placeholder="${placeholder}">
+          `,
+          actions: [
+            { label: 'Cancel', class: 'btn-ghost', onclick: () => resolve(null) },
+            { label: confirmLabel, class: 'btn-primary',
+              onclick: (panel) => resolve(panel.querySelector('#__prompt_input').value) },
+          ],
+        });
+      });
+    }
+  </script>
+  {% endraw %}
+
+  {% block scripts %}{% endblock %}
 </body>
 </html>

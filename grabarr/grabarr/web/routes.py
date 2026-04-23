@@ -39,9 +39,32 @@ def mount_static(app: object) -> None:
 
 @router.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request) -> HTMLResponse:
-    """Minimal dashboard (MVP): show version, adapters, profile count."""
+    """Overview dashboard: health strip + adapter snapshot + recent downloads."""
+    import httpx
+
     profiles = await list_profiles()
     adapters = get_registered_adapters()
+
+    # Pull richer data from our own JSON endpoints (shares logic).
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=request.app),
+        base_url=str(request.base_url).rstrip("/"),
+    ) as client:
+        sources = (await client.get("/api/sources")).json().get("items", [])
+        stats = (await client.get("/api/stats/overview")).json()
+        recent = (await client.get("/api/downloads?page=1&size=8")).json().get("items", [])
+
+    adapter_statuses = [
+        {
+            "id": s["id"],
+            "display_name": s["display_name"],
+            "status": s["health"]["status"],
+            "reason": s["health"]["reason"],
+            "quota": s.get("quota"),
+        }
+        for s in sources
+    ]
+
     return templates.TemplateResponse(
         request,
         "dashboard.html",
@@ -49,9 +72,24 @@ async def dashboard(request: Request) -> HTMLResponse:
             "version": __version__,
             "profile_count": len(profiles),
             "adapter_count": len(adapters),
-            "adapters": adapters,
+            "adapter_statuses": adapter_statuses,
+            "stats": stats,
+            "recent_downloads": recent,
         },
     )
+
+
+@router.get("/health", response_class=HTMLResponse)
+async def health_page(request: Request) -> HTMLResponse:
+    """HTML UI wrapping the /healthz JSON."""
+    import httpx
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=request.app),
+        base_url=str(request.base_url).rstrip("/"),
+    ) as client:
+        data = (await client.get("/healthz")).json()
+    return templates.TemplateResponse(request, "health.html", {"data": data})
 
 
 @router.get("/profiles", response_class=HTMLResponse)

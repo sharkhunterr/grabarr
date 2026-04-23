@@ -2,51 +2,165 @@
 {% block title %}Dashboard · Grabarr{% endblock %}
 
 {% block content %}
-<div class="mb-6">
-  <h1 class="text-2xl font-bold">Dashboard</h1>
-  <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-    Grabarr is up. Pick a profile, copy its Prowlarr config, and you're ready.
-  </p>
+<div class="flex flex-wrap items-start justify-between gap-4 mb-6">
+  <div>
+    <h1 class="page-title">Dashboard</h1>
+    <p class="page-subtitle">Live overview of your indexer bridge.</p>
+  </div>
+  <div class="flex flex-wrap gap-2">
+    <a href="/profiles" class="btn-primary">Profiles</a>
+    <a href="/profiles/new" class="btn-secondary">+ New profile</a>
+  </div>
 </div>
 
-<div class="grid gap-4 md:grid-cols-3">
-  <div class="card">
-    <div class="text-sm text-gray-500 dark:text-gray-400">Version</div>
-    <div class="mt-1 text-2xl font-semibold">{{ version }}</div>
+<!-- Health strip -->
+<div class="grid gap-4 md:grid-cols-4 mb-6">
+  <div class="card card-body">
+    <div class="text-xs uppercase text-gray-500 dark:text-gray-400">Version</div>
+    <div class="mt-1 text-2xl font-semibold">v{{ version }}</div>
+    <a href="/health" class="mt-2 inline-block text-xs text-brand-600 hover:underline dark:text-brand-400">
+      Subsystem health →
+    </a>
   </div>
-  <div class="card">
-    <div class="text-sm text-gray-500 dark:text-gray-400">Profiles</div>
+  <div class="card card-body">
+    <div class="text-xs uppercase text-gray-500 dark:text-gray-400">Profiles</div>
     <div class="mt-1 text-2xl font-semibold">{{ profile_count }}</div>
-    <a href="/profiles" class="mt-2 inline-block text-sm text-indigo-600 hover:underline dark:text-indigo-400">Manage &rarr;</a>
+    <a href="/profiles" class="mt-2 inline-block text-xs text-brand-600 hover:underline dark:text-brand-400">
+      Manage →
+    </a>
   </div>
-  <div class="card">
-    <div class="text-sm text-gray-500 dark:text-gray-400">Source adapters</div>
+  <div class="card card-body">
+    <div class="text-xs uppercase text-gray-500 dark:text-gray-400">Source adapters</div>
     <div class="mt-1 text-2xl font-semibold">{{ adapter_count }}</div>
-    <ul class="mt-2 space-y-1 text-sm">
-      {% for aid, cls in adapters.items() | sort %}
-        <li class="flex items-center justify-between">
-          <span>{{ cls.display_name }}</span>
-          <span class="badge-neutral">{{ aid }}</span>
-        </li>
-      {% endfor %}
-    </ul>
+    <a href="/sources" class="mt-2 inline-block text-xs text-brand-600 hover:underline dark:text-brand-400">
+      Sources →
+    </a>
+  </div>
+  <div class="card card-body">
+    <div class="text-xs uppercase text-gray-500 dark:text-gray-400">Downloads (30d)</div>
+    <div class="mt-1 text-2xl font-semibold">{{ stats.downloads_total }}</div>
+    <div class="mt-2 flex flex-wrap gap-1 text-xs">
+      <span class="badge-success">✓ {{ stats.downloads_succeeded }}</span>
+      {% if stats.downloads_failed %}
+        <span class="badge-error">× {{ stats.downloads_failed }}</span>
+      {% endif %}
+      {% if stats.active_downloads %}
+        <span class="badge-warning">↻ {{ stats.active_downloads }}</span>
+      {% endif %}
+    </div>
   </div>
 </div>
 
-<div class="mt-8 card">
-  <h2 class="text-lg font-semibold">Next steps</h2>
-  <ol class="mt-3 list-decimal space-y-2 pl-6 text-sm">
-    <li>Open <a href="/profiles" class="text-indigo-600 hover:underline dark:text-indigo-400">Profiles</a> to see the seven seeded defaults.</li>
-    <li>Click <strong>Copy Prowlarr Config</strong> on a profile to download a ready-to-import JSON blob.</li>
-    <li>In Prowlarr, <em>Add Indexer &rarr; Generic Torznab</em>, paste, save.</li>
-    <li>Point your *arr app (Bookshelf, Readarr, etc.) at Prowlarr and mark a book as wanted.</li>
-  </ol>
+<div class="grid gap-6 lg:grid-cols-3">
+  <!-- Adapter health snapshot -->
+  <div class="card lg:col-span-2">
+    <div class="card-body">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold">Adapter health</h2>
+        <a href="/sources" class="text-xs text-brand-600 hover:underline dark:text-brand-400">Details →</a>
+      </div>
+      <ul class="divide-y divide-gray-100 dark:divide-gray-800">
+        {% for a in adapter_statuses %}
+        <li class="flex items-center justify-between py-3">
+          <div class="flex items-center gap-3">
+            <span class="health-dot
+              {% if a.status == 'healthy' %}health-ok
+              {% elif a.status == 'degraded' %}health-warn
+              {% elif a.status == 'unhealthy' %}health-bad
+              {% else %}health-idle{% endif %}"></span>
+            <div>
+              <div class="font-medium">{{ a.display_name }}</div>
+              <div class="text-xs text-gray-500 dark:text-gray-400">
+                {{ a.id }}
+                {% if a.reason %} · <span class="text-red-600 dark:text-red-400">{{ a.reason }}</span>{% endif %}
+              </div>
+            </div>
+          </div>
+          <div class="text-xs text-gray-500 dark:text-gray-400">
+            {% if a.quota %}
+              {{ a.quota.used }}/{{ a.quota.limit }}
+            {% else %}
+              —
+            {% endif %}
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+
+  <!-- Quick links -->
+  <div class="space-y-4">
+    <div class="card card-body">
+      <h2 class="text-lg font-semibold mb-3">Setup guide</h2>
+      <ol class="space-y-2 text-sm">
+        <li class="flex gap-2">
+          <span class="badge-brand shrink-0">1</span>
+          <span>Visit <a href="/profiles" class="text-brand-600 hover:underline dark:text-brand-400">Profiles</a>,
+                pick one, click <strong>Setup in Prowlarr</strong>.</span>
+        </li>
+        <li class="flex gap-2">
+          <span class="badge-brand shrink-0">2</span>
+          <span>In Prowlarr → Indexers → Add → Generic Torznab, paste each field.</span>
+        </li>
+        <li class="flex gap-2">
+          <span class="badge-brand shrink-0">3</span>
+          <span>Point Bookshelf / Readarr / Mylar3 at Prowlarr.</span>
+        </li>
+      </ol>
+    </div>
+
+    <div class="card card-body">
+      <h2 class="text-lg font-semibold mb-3">Quick actions</h2>
+      <div class="flex flex-col gap-2">
+        <a href="/profiles/new" class="btn-secondary justify-start">+ New profile</a>
+        <a href="/notifications" class="btn-secondary justify-start">+ Add Apprise target</a>
+        <a href="/settings" class="btn-secondary justify-start">⚙ Tune runtime settings</a>
+        <a href="/downloads" class="btn-secondary justify-start">⏱ Recent downloads</a>
+      </div>
+    </div>
+  </div>
 </div>
 
-<div class="mt-8 card">
-  <h2 class="text-lg font-semibold">Health</h2>
-  <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-    Live status is available at <a href="/healthz" class="font-mono text-indigo-600 hover:underline dark:text-indigo-400">/healthz</a>.
-  </p>
+<!-- Recent downloads strip -->
+<div class="card mt-6">
+  <div class="card-body">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-lg font-semibold">Recent downloads</h2>
+      <a href="/downloads" class="text-xs text-brand-600 hover:underline dark:text-brand-400">All downloads →</a>
+    </div>
+    {% if recent_downloads %}
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="text-left text-xs uppercase text-gray-500 dark:text-gray-400">
+          <tr>
+            <th class="pb-2 pr-4 font-medium">Started</th>
+            <th class="pb-2 pr-4 font-medium">Title</th>
+            <th class="pb-2 pr-4 font-medium">Source</th>
+            <th class="pb-2 pr-4 font-medium">Status</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+          {% for d in recent_downloads %}
+          <tr>
+            <td class="py-2 pr-4 whitespace-nowrap text-xs font-mono text-gray-500">{{ (d.started_at or '')[:16] }}</td>
+            <td class="py-2 pr-4 max-w-md truncate" title="{{ d.title }}">{{ d.title }}</td>
+            <td class="py-2 pr-4 text-xs">{{ d.source_id }}</td>
+            <td class="py-2 pr-4">
+              {% if d.status in ['seeding','completed'] %}<span class="badge-success">{{ d.status }}</span>
+              {% elif d.status == 'failed' %}<span class="badge-error">{{ d.status }}</span>
+              {% else %}<span class="badge-warning">{{ d.status }}</span>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="py-8 text-center text-gray-500 dark:text-gray-400 text-sm">
+      No downloads yet. Point a *arr at one of your profiles and grab a book.
+    </div>
+    {% endif %}
+  </div>
 </div>
 {% endblock %}

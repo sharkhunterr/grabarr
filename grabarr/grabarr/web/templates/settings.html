@@ -194,9 +194,9 @@
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(body),
     });
-    if (!r.ok) { alert('Save failed: ' + await r.text()); return false; }
-    alert('Saved.');
-    window.location.reload();
+    if (!r.ok) { toast('Save failed: ' + await r.text(), 'err', 5000); return false; }
+    toast('Settings saved', 'ok');
+    setTimeout(() => window.location.reload(), 400);
     return false;
   }
 </script>

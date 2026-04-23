@@ -74,15 +74,21 @@
 {% raw %}
 <script>
   async function dupe(slug) {
-    const newSlug = prompt('New slug for the copy (lowercase letters, digits, _ or -):', slug + '_copy');
+    const newSlug = await promptModal({
+      title: 'Duplicate profile',
+      body: 'Slug for the copy (lowercase letters, digits, <code>_</code> or <code>-</code>):',
+      defaultValue: slug + '_copy',
+      confirmLabel: 'Duplicate',
+    });
     if (!newSlug) return;
     const r = await fetch(`/api/profiles/${slug}/duplicate`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({new_slug: newSlug}),
     });
-    if (!r.ok) { alert('Duplicate failed: ' + await r.text()); return; }
-    window.location.href = `/profiles/${newSlug}/edit`;
+    if (!r.ok) { toast('Duplicate failed: ' + await r.text(), 'err', 5000); return; }
+    toast('Profile duplicated — opening editor', 'ok');
+    setTimeout(() => { window.location.href = `/profiles/${newSlug}/edit`; }, 400);
   }
 </script>
 {% endraw %}

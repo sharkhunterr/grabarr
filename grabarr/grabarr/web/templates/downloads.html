@@ -104,10 +104,16 @@
 {% raw %}
 <script>
   async function deleteDownload(id) {
-    if (!confirm('Delete this download row? The file on disk (if any) is removed too.')) return;
+    const ok = await confirmModal({
+      title: 'Delete download?',
+      body: 'This removes the row AND the staged file on disk (if any). The Prowlarr/Bookshelf side is not affected.',
+      confirmLabel: 'Delete',
+      danger: true,
+    });
+    if (!ok) return;
     const r = await fetch(`/api/downloads/${id}`, {method: 'DELETE'});
-    if (r.ok) window.location.reload();
-    else alert('Delete failed: ' + await r.text());
+    if (r.ok) { toast('Deleted', 'ok'); setTimeout(() => window.location.reload(), 400); }
+    else toast('Delete failed: ' + await r.text(), 'err', 5000);
   }
 </script>
 {% endraw %}

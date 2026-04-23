@@ -107,10 +107,17 @@
   </div>
   <script>
     async function regenerateKey() {
-      if (!confirm('Generate a new API key? The current one above will stop working immediately.')) return;
+      const ok = await confirmModal({
+        title: 'Regenerate API key?',
+        body: 'The current key will stop working immediately. You\'ll need to re-paste the new one into Prowlarr.',
+        confirmLabel: 'Regenerate',
+        danger: true,
+      });
+      if (!ok) return;
       const r = await fetch('/api/profiles/{{ profile.slug }}/regenerate-key', {method: 'POST'});
-      if (!r.ok) { alert('Regenerate failed: ' + await r.text()); return; }
-      window.location.reload();
+      if (!r.ok) { toast('Regenerate failed: ' + await r.text(), 'err', 5000); return; }
+      toast('New key generated', 'ok');
+      setTimeout(() => window.location.reload(), 500);
     }
   </script>
 </div>
@@ -133,6 +140,7 @@ curl -sS "{{ base_url }}/api?t=search&q=foundation&apikey={{ api_key }}&limit=3"
     navigator.clipboard.writeText(val).then(() => {
       const orig = btn.textContent;
       btn.textContent = 'Copied ✓';
+      toast('Copied to clipboard', 'ok', 1500);
       setTimeout(() => btn.textContent = orig, 1200);
     });
   }

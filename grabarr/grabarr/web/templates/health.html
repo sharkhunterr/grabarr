@@ -1,0 +1,102 @@
+{% extends "_base.html" %}
+{% block title %}Health · Grabarr{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+  <div>
+    <h1 class="page-title">Health</h1>
+    <p class="page-subtitle">Per-subsystem liveness + per-adapter circuit-breaker state.</p>
+  </div>
+  <div class="flex gap-2">
+    <button class="btn-secondary" onclick="window.location.reload()">Refresh</button>
+    <a href="/healthz" class="btn-ghost" target="_blank">Raw JSON</a>
+  </div>
+</div>
+
+<!-- Overall badge -->
+<div class="card mb-6">
+  <div class="card-body flex items-center gap-4">
+    <span class="health-dot {% if data.status == 'ok' %}health-ok{% else %}health-bad{% endif %} !h-4 !w-4"></span>
+    <div class="flex-1">
+      <div class="text-lg font-semibold">
+        {% if data.status == 'ok' %}All systems nominal{% else %}Degraded{% endif %}
+      </div>
+      <div class="text-xs text-gray-500 dark:text-gray-400">
+        Version v{{ data.version }} · checked at {{ data.checked_at }}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="grid gap-4 md:grid-cols-2">
+  {% for name, sub in data.subsystems.items() if name != 'adapters' %}
+  {% set s = sub.status %}
+  <div class="card">
+    <div class="card-body">
+      <div class="flex items-start justify-between">
+        <div class="flex items-center gap-3">
+          <span class="health-dot
+            {% if s == 'ok' %}health-ok
+            {% elif s in ['degraded', 'idle', 'disabled'] %}health-warn
+            {% else %}health-bad{% endif %}"></span>
+          <div>
+            <div class="font-semibold capitalize">{{ name.replace('_', ' ') }}</div>
+            <div class="text-xs text-gray-500 dark:text-gray-400">{{ s }}</div>
+          </div>
+        </div>
+      </div>
+      {% if sub.url %}
+        <div class="mt-3 text-xs font-mono break-all text-gray-600 dark:text-gray-400">{{ sub.url }}</div>
+      {% endif %}
+      {% if sub.active_torrents is defined %}
+        <div class="mt-3 text-xs text-gray-500 dark:text-gray-400">
+          Active torrents: <strong>{{ sub.active_torrents }}</strong>
+        </div>
+      {% endif %}
+      {% if sub.error %}
+        <div class="mt-3 text-xs text-red-600 dark:text-red-400">{{ sub.error }}</div>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Adapters -->
+<div class="card mt-6">
+  <div class="card-body">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-lg font-semibold">Source adapters</h2>
+      <a href="/sources" class="text-xs text-brand-600 hover:underline dark:text-brand-400">Manage →</a>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="text-left text-xs uppercase text-gray-500 dark:text-gray-400">
+          <tr>
+            <th class="pb-2 pr-4 font-medium">Adapter</th>
+            <th class="pb-2 pr-4 font-medium">Status</th>
+            <th class="pb-2 pr-4 font-medium">Reason</th>
+            <th class="pb-2 pr-4 font-medium">Consecutive failures</th>
+            <th class="pb-2 pr-4 font-medium">Last check</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+          {% for aid, a in data.subsystems.adapters.items() %}
+          <tr>
+            <td class="py-2 pr-4 font-mono">{{ aid }}</td>
+            <td class="py-2 pr-4">
+              {% if a.status == 'healthy' %}<span class="badge-success">healthy</span>
+              {% elif a.status == 'degraded' %}<span class="badge-warning">degraded</span>
+              {% elif a.status == 'unhealthy' %}<span class="badge-error">unhealthy</span>
+              {% else %}<span class="badge-neutral">{{ a.status }}</span>{% endif %}
+            </td>
+            <td class="py-2 pr-4 text-xs text-gray-600 dark:text-gray-400">{{ a.reason or '—' }}</td>
+            <td class="py-2 pr-4 text-xs">{{ a.consecutive_failures or 0 }}</td>
+            <td class="py-2 pr-4 text-xs font-mono text-gray-500">{{ (a.last_check_at or '—')[:19] }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

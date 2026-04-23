@@ -73,8 +73,23 @@
     const r = await fetch(`/api/sources/${id}/test`, {method: 'POST'});
     const data = await r.json();
     btn.disabled = false; btn.textContent = 'Test Now';
-    alert(`Status: ${data.status}\nReason: ${data.reason || '—'}\nMessage: ${data.last_error_message || '—'}`);
-    window.location.reload();
+    const kind = data.status === 'healthy' ? 'ok' : (data.status === 'degraded' ? 'warn' : 'err');
+    showModal({
+      title: `Test result — ${id}`,
+      html: `
+        <dl class="space-y-3 text-sm">
+          <div><dt class="text-xs uppercase text-gray-500 dark:text-gray-400">Status</dt>
+               <dd class="mt-1"><span class="badge-${kind === 'ok' ? 'success' : (kind === 'warn' ? 'warning' : 'error')}">${data.status || '—'}</span></dd></div>
+          <div><dt class="text-xs uppercase text-gray-500 dark:text-gray-400">Reason</dt>
+               <dd class="mt-1">${data.reason || '—'}</dd></div>
+          <div><dt class="text-xs uppercase text-gray-500 dark:text-gray-400">Last check</dt>
+               <dd class="mt-1 font-mono text-xs">${data.last_check_at || '—'}</dd></div>
+          ${data.last_error_message ? `<div><dt class="text-xs uppercase text-gray-500 dark:text-gray-400">Message</dt><dd class="mt-1 font-mono text-xs break-all">${data.last_error_message}</dd></div>` : ''}
+        </dl>
+      `,
+      actions: [{ label: 'Close', class: 'btn-primary' }],
+    });
+    setTimeout(() => window.location.reload(), 3500);
   }
 </script>
 {% endraw %}

@@ -17,12 +17,26 @@
     </p>
   </div>
   {% if not is_new and not profile.is_default %}
-  <button class="btn-danger"
-          onclick="if (confirm('Delete this profile? This cannot be undone.')) {
-            fetch('/api/profiles/{{ profile.slug }}', {method:'DELETE'}).then(() => window.location.href='/profiles');
-          }">Delete</button>
+  <button class="btn-danger" onclick="deleteProfileModal()">Delete</button>
   {% endif %}
 </div>
+
+<script>
+  const _profileSlug = "{{ profile.slug }}";
+  async function deleteProfileModal() {
+    const ok = await confirmModal({
+      title: 'Delete profile?',
+      body: 'This cannot be undone. Prowlarr indexers pointing here will stop working.',
+      confirmLabel: 'Delete',
+      danger: true,
+    });
+    if (!ok) return;
+    const r = await fetch(`/api/profiles/${_profileSlug}`, {method: 'DELETE'});
+    if (!r.ok) { toast('Delete failed: ' + await r.text(), 'err', 5000); return; }
+    toast('Profile deleted', 'ok');
+    setTimeout(() => { window.location.href = '/profiles'; }, 400);
+  }
+</script>
 
 <form id="profile-form" class="space-y-6" onsubmit="return saveProfile(event)">
   <div class="card grid gap-4 md:grid-cols-2">
@@ -272,7 +286,7 @@
       body: JSON.stringify(body),
     });
     if (!r.ok) {
-      alert('Save failed: ' + await r.text());
+      toast('Save failed: ' + await r.text(), 'err', 5000);
       return false;
     }
     // Reload THIS page so you can verify every field persisted.
