@@ -69,6 +69,31 @@ _DEFAULTS: dict[str, Any] = {
 }
 
 
+# ---- Synchronous cache --------------------------------------------------
+#
+# The Shelfmark bridge (``_SettingsBackend.get`` in app.py) and other
+# adapters read settings from plain synchronous code paths — vendored
+# Shelfmark's cascade, rate-limiter setup, etc. To avoid spinning an
+# event loop from inside sync code, we warm an in-memory cache at
+# startup and refresh it on every mutation.
+_cache: dict[str, Any] = dict(_DEFAULTS)
+
+
+def get_sync(key: str, default: Any = None) -> Any:
+    """Synchronous lookup in the warm cache (falls back to ``default``)."""
+    return _cache.get(key, default)
+
+
+async def load_cache() -> None:
+    """Warm the sync cache from the DB. Call once at startup."""
+    _cache.clear()
+    _cache.update(_DEFAULTS)
+    async with session_scope() as session:
+        rows = await session.execute(select(Setting))
+        for r in rows.scalars().all():
+            _cache[r.key] = r.value
+
+
 async def get_all() -> dict[str, Any]:
     """Return every setting as a flat dict (DB value > default)."""
     async with session_scope() as session:
@@ -76,6 +101,9 @@ async def get_all() -> dict[str, Any]:
         overrides = {r.key: r.value for r in rows.scalars().all()}
     out = dict(_DEFAULTS)
     out.update(overrides)
+    # Keep the sync cache fresh with whatever we just read.
+    _cache.clear()
+    _cache.update(out)
     return out
 
 

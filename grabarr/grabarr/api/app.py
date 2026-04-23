@@ -77,29 +77,46 @@ async def _run_migrations() -> None:
 
 
 class _SettingsBackend:
-    """Minimal `.get(key, default)` shim over the ``settings`` table.
+    """Translating `.get(key, default)` shim over the ``settings`` table.
 
-    Used to wire the Shelfmark config proxy at startup. A proper
-    service-layer cache + invalidation will land when the admin UI's
-    ``PATCH /api/settings`` endpoint does.
+    Shelfmark's vendored code reads upstream env-style keys
+    (``EXT_BYPASSER_URL``, ``AA_DONATOR_KEY`` …). We translate those to
+    Grabarr's own namespaced keys (``bypass.flaresolverr_url``, …) and
+    look them up in the warm ``settings_service`` cache. Returning
+    ``_MISSING`` lets the proxy fall through to its env/builtin layers
+    when we don't have an opinion.
     """
 
-    async def _fetch(self, key: str) -> object | None:
-        from grabarr.core.settings_model import Setting  # lazy to avoid cycles
-
-        async with session_scope() as session:
-            row = await session.execute(select(Setting.value).where(Setting.key == key))
-            return row.scalar_one_or_none()
-
     def get(self, key: str, default: object = None) -> object:
-        """Synchronous fallback — returns the built-in default.
+        """Return a Grabarr-backed value, or ``default`` to let the proxy
+        cascade (env var → built-in). The caller passes its own
+        sentinel as ``default`` to distinguish "no opinion" from "None"."""
+        from grabarr.core.settings_service import get_sync
 
-        Shelfmark's vendored code calls ``config.get()`` synchronously
-        from lots of code paths; a proper implementation would cache
-        settings into a plain dict at startup. This minimal version
-        defers that optimisation and always falls through to the proxy's
-        env-var + built-in-defaults layers, which is safe for v1.0.
-        """
+        if key == "EXT_BYPASSER_URL":
+            raw = (get_sync("bypass.flaresolverr_url", "") or "").strip()
+            if not raw:
+                return default
+            # Accept either "host:port" or "host:port/v1" → return host:port.
+            v = raw.rstrip("/")
+            if v.endswith("/v1"):
+                v = v[:-3]
+            return v
+        if key == "EXT_BYPASSER_PATH":
+            raw = (get_sync("bypass.flaresolverr_url", "") or "").strip()
+            if not raw:
+                return default
+            return "/v1"
+        if key == "USING_EXTERNAL_BYPASSER":
+            return get_sync("bypass.mode", "external") == "external"
+        if key == "AA_DONATOR_KEY":
+            from grabarr.core.config import load_settings
+
+            try:
+                s = load_settings()
+            except Exception:  # noqa: BLE001
+                return default
+            return s.sources.anna_archive.member_key or default
         return default
 
 
@@ -135,7 +152,10 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
             slugs = await seed_defaults()
             _log.info("seeded %d default profiles", len(slugs))
-    # 5. Bridge Shelfmark vendored code to the settings backend.
+    # 5. Warm the sync settings cache, then bridge Shelfmark vendored code.
+    from grabarr.core.settings_service import load_cache as load_settings_cache
+
+    await load_settings_cache()
     install_shelfmark_bridge(_SettingsBackend())
 
     # 6. Start adapter health monitor + cleanup sweeper in the background.
