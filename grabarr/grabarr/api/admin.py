@@ -356,6 +356,204 @@ async def api_test_apprise(url_id: str) -> dict:
     return {"dispatched": True}
 
 
+# ---- Settings ----------------------------------------------------------
+
+
+@router.get("/settings")
+async def api_list_settings() -> dict:
+    from grabarr.core.settings_service import get_all
+
+    data = await get_all()
+    # Redact secret-looking values.
+    redacted = dict(data)
+    for k in list(redacted.keys()):
+        if any(s in k for s in ("key", "secret", "cookie", "token", "password")):
+            redacted[k] = "***"
+    return redacted
+
+
+@router.patch("/settings")
+async def api_patch_settings(body: dict[str, Any] = Body(...)) -> dict:
+    from grabarr.core.settings_service import update_many
+
+    return await update_many(body)
+
+
+# ---- Downloads history -------------------------------------------------
+
+
+@router.get("/downloads")
+async def api_list_downloads(
+    page: int = Query(1, ge=1),
+    size: int = Query(50, ge=1, le=200),
+    status: str = Query(""),
+    profile: str = Query(""),
+    source: str = Query(""),
+    q: str = Query(""),
+) -> dict:
+    from sqlalchemy import desc, func, or_, select
+
+    from grabarr.db.session import session_scope
+    from grabarr.downloads.models import Download
+    from grabarr.profiles.models import Profile
+
+    async with session_scope() as session:
+        stmt = select(Download).order_by(desc(Download.started_at))
+        count_stmt = select(func.count(Download.id))
+
+        profile_slug_by_id: dict[str, str] = {}
+        if profile:
+            p_row = await session.execute(select(Profile).where(Profile.slug == profile))
+            p = p_row.scalar_one_or_none()
+            if p is None:
+                return {"page": page, "size": size, "total": 0, "items": []}
+            stmt = stmt.where(Download.profile_id == p.id)
+            count_stmt = count_stmt.where(Download.profile_id == p.id)
+        if status:
+            stmt = stmt.where(Download.status == status)
+            count_stmt = count_stmt.where(Download.status == status)
+        if source:
+            stmt = stmt.where(Download.source_id == source)
+            count_stmt = count_stmt.where(Download.source_id == source)
+        if q:
+            like = f"%{q}%"
+            stmt = stmt.where(or_(Download.title.ilike(like), Download.author.ilike(like)))
+            count_stmt = count_stmt.where(
+                or_(Download.title.ilike(like), Download.author.ilike(like))
+            )
+
+        rows = await session.execute(stmt.offset((page - 1) * size).limit(size))
+        items = list(rows.scalars().all())
+        total = (await session.execute(count_stmt)).scalar_one()
+
+        profile_ids = {it.profile_id for it in items}
+        if profile_ids:
+            p_rows = await session.execute(
+                select(Profile).where(Profile.id.in_(profile_ids))
+            )
+            profile_slug_by_id = {p.id: p.slug for p in p_rows.scalars().all()}
+
+    return {
+        "page": page,
+        "size": size,
+        "total": total,
+        "items": [
+            {
+                "id": it.id,
+                "token": it.token,
+                "profile_slug": profile_slug_by_id.get(it.profile_id, "?"),
+                "source_id": it.source_id,
+                "title": it.title,
+                "author": it.author,
+                "year": it.year,
+                "filename": it.filename,
+                "size_bytes": it.size_bytes,
+                "status": it.status,
+                "download_mode": it.download_mode,
+                "torrent_mode": it.torrent_mode,
+                "info_hash": it.info_hash,
+                "failure_reason": it.failure_reason,
+                "started_at": it.started_at.isoformat() if it.started_at else None,
+                "completed_at": it.completed_at.isoformat() if it.completed_at else None,
+                "file_available": bool(it.file_path),
+            }
+            for it in items
+        ],
+    }
+
+
+@router.delete("/downloads/{download_id}", status_code=204)
+async def api_delete_download(download_id: str) -> None:
+    from pathlib import Path
+
+    from sqlalchemy import select
+
+    from grabarr.db.session import session_scope
+    from grabarr.downloads.models import Download
+
+    async with session_scope() as session:
+        row = await session.execute(select(Download).where(Download.id == download_id))
+        obj = row.scalar_one_or_none()
+        if obj is None:
+            raise HTTPException(status_code=404, detail="not found")
+        if obj.file_path:
+            try:
+                Path(obj.file_path).unlink(missing_ok=True)
+            except OSError:
+                pass
+        await session.delete(obj)
+
+
+# ---- Stats -------------------------------------------------------------
+
+
+@router.get("/stats/overview")
+async def api_stats_overview() -> dict:
+    from sqlalchemy import func, select
+
+    from grabarr.db.session import session_scope
+    from grabarr.downloads.models import Download
+    from grabarr.torrents.models import Torrent
+
+    async with session_scope() as session:
+        total = (await session.execute(select(func.count(Download.id)))).scalar_one()
+        succeeded = (
+            await session.execute(
+                select(func.count(Download.id)).where(
+                    Download.status.in_(["seeding", "completed"])
+                )
+            )
+        ).scalar_one()
+        failed = (
+            await session.execute(
+                select(func.count(Download.id)).where(Download.status == "failed")
+            )
+        ).scalar_one()
+        active = (
+            await session.execute(
+                select(func.count(Download.id)).where(
+                    Download.status.in_(["queued", "resolving", "downloading", "verifying"])
+                )
+            )
+        ).scalar_one()
+        seeded = (await session.execute(select(func.count(Torrent.info_hash)))).scalar_one()
+
+        rows = await session.execute(
+            select(Download.source_id, Download.status, func.count(Download.id)).group_by(
+                Download.source_id, Download.status
+            )
+        )
+        per_source: dict[str, dict[str, int]] = {}
+        for source_id, status, count in rows.all():
+            per_source.setdefault(source_id, {})[status] = count
+
+    return {
+        "downloads_total": total,
+        "downloads_succeeded": succeeded,
+        "downloads_failed": failed,
+        "active_downloads": active,
+        "active_seeds": seeded,
+        "per_source": per_source,
+    }
+
+
+@router.get("/stats/top-queries")
+async def api_stats_top_queries(limit: int = Query(10, ge=1, le=50)) -> dict:
+    from sqlalchemy import desc, func, select
+
+    from grabarr.db.session import session_scope
+    from grabarr.downloads.models import Download
+
+    async with session_scope() as session:
+        rows = await session.execute(
+            select(Download.title, func.count(Download.id).label("n"))
+            .group_by(Download.title)
+            .order_by(desc("n"))
+            .limit(limit)
+        )
+    return {"items": [{"title": t, "count": c} for t, c in rows.all()]}
+
+
 @router.get("/notifications/log")
 async def api_notifications_log(
     page: int = Query(1, ge=1),

@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 @pytest.fixture
 def app_client(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("GRABARR_CONFIG_PATH", str(tmp_path / "nonexistent.yaml"))
     monkeypatch.setenv("GRABARR_SERVER__DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("GRABARR_SERVER__DOWNLOADS_DIR", str(tmp_path / "downloads"))
     monkeypatch.setenv("GRABARR_TORRENT_MODE", "webseed")

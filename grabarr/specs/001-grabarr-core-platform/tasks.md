@@ -321,11 +321,11 @@ Single-project Python layout under the repository root; package is `grabarr/`, t
 
 ### Admin UI — remaining pages (Constitution Article XVI)
 
-- [ ] T143 [P] Create `grabarr/web/templates/settings/bypass.html`, `downloads.html`, `torrents.html`, `paths.html`, `metadata.html`, `backup.html` — the six Settings sub-pages per spec FR-9.4.
-- [ ] T144 [P] Create `grabarr/web/templates/downloads.html` — paginated history, per-entry detail modal (timings, info_hash, file status), retry button, delete action with confirmation dialog.
-- [ ] T145 [P] Create `grabarr/web/templates/stats.html` — Chart.js graphs wired to `/api/stats/series`, top-queries table, Prometheus URL display, CSV/JSON export buttons.
-- [ ] T146 [P] Extend `grabarr/api/admin.py` — `/api/settings` GET/PATCH, `/api/settings/backup` export, `/api/settings/restore` import (multipart), `/api/downloads` list + detail + retry + delete, `/api/stats/overview`, `/api/stats/series`, `/api/stats/top-queries`, `/api/stats/export`.
-- [ ] T147 [P] Extend `grabarr/web/routes.py` with `/settings`, `/settings/{section}`, `/downloads`, `/stats` HTML routes.
+- [X] T143 [P] Create `grabarr/web/templates/settings/bypass.html`, `downloads.html`, `torrents.html`, `paths.html`, `metadata.html`, `backup.html` — the six Settings sub-pages per spec FR-9.4.
+- [X] T144 [P] Create `grabarr/web/templates/downloads.html` — paginated history, per-entry detail modal (timings, info_hash, file status), retry button, delete action with confirmation dialog.
+- [X] T145 [P] Create `grabarr/web/templates/stats.html` — Chart.js graphs wired to `/api/stats/series`, top-queries table, Prometheus URL display, CSV/JSON export buttons.
+- [X] T146 [P] Extend `grabarr/api/admin.py` — `/api/settings` GET/PATCH, `/api/settings/backup` export, `/api/settings/restore` import (multipart), `/api/downloads` list + detail + retry + delete, `/api/stats/overview`, `/api/stats/series`, `/api/stats/top-queries`, `/api/stats/export`.
+- [X] T147 [P] Extend `grabarr/web/routes.py` with `/settings`, `/settings/{section}`, `/downloads`, `/stats` HTML routes.
 - [ ] T148 [P] Extend `grabarr/web/templates/_base.html` — toast notifications helper, confirmation-dialog component, keyboard-shortcuts help modal bound to `?`.
 - [ ] T149 [P] Run accessibility audit on every template (WCAG AA): ensure all form inputs have `<label>`, focus outlines visible, no color-only information, screen-reader-only helper text where needed.
 

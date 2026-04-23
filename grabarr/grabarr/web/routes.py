@@ -121,6 +121,77 @@ async def sources_page(request: Request) -> HTMLResponse:
     )
 
 
+@router.get("/settings", response_class=HTMLResponse)
+async def settings_page(request: Request) -> HTMLResponse:
+    from grabarr.core.settings_service import get_all
+
+    return templates.TemplateResponse(
+        request, "settings.html", {"settings": await get_all()}
+    )
+
+
+@router.get("/downloads", response_class=HTMLResponse)
+async def downloads_page(
+    request: Request,
+) -> HTMLResponse:
+    import math
+
+    import httpx
+
+    qp = dict(request.query_params)
+    page = max(int(qp.get("page", 1)), 1)
+    size = int(qp.get("size", 50))
+
+    # Serialise through our own /api/downloads to share the filter logic.
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=request.app),
+        base_url=str(request.base_url).rstrip("/"),
+    ) as client:
+        params = {k: qp.get(k, "") for k in ("status", "source", "profile", "q")}
+        params["page"] = str(page)
+        params["size"] = str(size)
+        r = await client.get("/api/downloads", params=params)
+    data = r.json()
+    pages = max(math.ceil((data.get("total", 0) or 1) / size), 1)
+
+    # Rebuild query string for pagination links.
+    keep = {k: v for k, v in qp.items() if k != "page" and v}
+    query_suffix = ("&" + "&".join(f"{k}={v}" for k, v in keep.items())) if keep else ""
+
+    return templates.TemplateResponse(
+        request,
+        "downloads.html",
+        {
+            "items": data.get("items", []),
+            "total": data.get("total", 0),
+            "page": page,
+            "pages": pages,
+            "query_suffix": query_suffix,
+            "filter_status": qp.get("status", ""),
+            "filter_source": qp.get("source", ""),
+            "filter_profile": qp.get("profile", ""),
+            "filter_q": qp.get("q", ""),
+        },
+    )
+
+
+@router.get("/stats", response_class=HTMLResponse)
+async def stats_page(request: Request) -> HTMLResponse:
+    import httpx
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=request.app),
+        base_url=str(request.base_url).rstrip("/"),
+    ) as client:
+        overview = (await client.get("/api/stats/overview")).json()
+        tops = (await client.get("/api/stats/top-queries?limit=10")).json()
+    return templates.TemplateResponse(
+        request,
+        "stats.html",
+        {"overview": overview, "top_titles": tops.get("items", [])},
+    )
+
+
 @router.get("/notifications", response_class=HTMLResponse)
 async def notifications_page(request: Request) -> HTMLResponse:
     """Apprise URL list + recent dispatch log."""

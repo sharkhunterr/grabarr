@@ -1,0 +1,114 @@
+{% extends "_base.html" %}
+{% block title %}Downloads · Grabarr{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+  <h1 class="text-2xl font-bold">Downloads</h1>
+  <div class="text-sm text-gray-500 dark:text-gray-400">
+    {{ total }} total · page {{ page }} / {{ pages }}
+  </div>
+</div>
+
+<form method="get" class="card mb-6 flex flex-wrap gap-3 items-end">
+  <div>
+    <label class="label" for="f-status">Status</label>
+    <select id="f-status" name="status" class="input">
+      <option value="">(any)</option>
+      {% for s in ['queued','resolving','downloading','verifying','ready','seeding','completed','failed'] %}
+        <option value="{{ s }}" {% if filter_status == s %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div>
+    <label class="label" for="f-source">Source</label>
+    <input id="f-source" name="source" class="input" value="{{ filter_source }}">
+  </div>
+  <div>
+    <label class="label" for="f-profile">Profile slug</label>
+    <input id="f-profile" name="profile" class="input" value="{{ filter_profile }}">
+  </div>
+  <div class="flex-1 min-w-[200px]">
+    <label class="label" for="f-q">Title / author contains</label>
+    <input id="f-q" name="q" class="input" value="{{ filter_q }}">
+  </div>
+  <button type="submit" class="btn-primary">Filter</button>
+  <a href="/downloads" class="btn-ghost">Reset</a>
+</form>
+
+<div class="card overflow-x-auto">
+  <table class="w-full text-sm">
+    <thead class="text-left text-xs uppercase text-gray-500 dark:text-gray-400">
+      <tr>
+        <th class="py-2">Started</th>
+        <th>Title</th>
+        <th>Author</th>
+        <th>Profile</th>
+        <th>Source</th>
+        <th>Mode</th>
+        <th>Size</th>
+        <th>Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for d in items %}
+      <tr class="border-t border-gray-100 dark:border-gray-700">
+        <td class="py-2 font-mono text-xs whitespace-nowrap">{{ d.started_at[:19] if d.started_at else '—' }}</td>
+        <td class="max-w-sm truncate" title="{{ d.title }}">{{ d.title }}</td>
+        <td class="text-xs">{{ d.author or '—' }}</td>
+        <td><a href="/profiles" class="text-indigo-600 hover:underline dark:text-indigo-400">{{ d.profile_slug }}</a></td>
+        <td class="text-xs">{{ d.source_id }}</td>
+        <td class="text-xs">
+          <span class="badge-neutral">{{ d.download_mode }}</span>
+          <span class="badge-neutral">{{ d.torrent_mode }}</span>
+        </td>
+        <td class="text-xs">{% if d.size_bytes %}{{ (d.size_bytes / 1024 / 1024) | round(1) }} MB{% else %}—{% endif %}</td>
+        <td>
+          {% if d.status == 'seeding' or d.status == 'completed' %}
+            <span class="badge-success">{{ d.status }}</span>
+          {% elif d.status == 'failed' %}
+            <span class="badge-error" title="{{ d.failure_reason or '' }}">{{ d.status }}</span>
+          {% elif d.status in ['queued','resolving','downloading','verifying'] %}
+            <span class="badge-warning">{{ d.status }}</span>
+          {% else %}
+            <span class="badge-neutral">{{ d.status }}</span>
+          {% endif %}
+        </td>
+        <td>
+          <button class="text-xs text-red-600 hover:underline"
+                  onclick="deleteDownload('{{ d.id }}')">delete</button>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="9" class="py-4 text-center text-gray-500 dark:text-gray-400">
+        No downloads recorded yet.
+      </td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="mt-4 flex items-center justify-between text-sm">
+  <div>
+    {% if page > 1 %}
+      <a href="?page={{ page - 1 }}{{ query_suffix }}" class="btn-secondary">&larr; Previous</a>
+    {% endif %}
+  </div>
+  <div>
+    {% if page < pages %}
+      <a href="?page={{ page + 1 }}{{ query_suffix }}" class="btn-secondary">Next &rarr;</a>
+    {% endif %}
+  </div>
+</div>
+
+{% raw %}
+<script>
+  async function deleteDownload(id) {
+    if (!confirm('Delete this download row? The file on disk (if any) is removed too.')) return;
+    const r = await fetch(`/api/downloads/${id}`, {method: 'DELETE'});
+    if (r.ok) window.location.reload();
+    else alert('Delete failed: ' + await r.text());
+  }
+</script>
+{% endraw %}
+{% endblock %}

@@ -60,6 +60,7 @@ _FAKE_EPUB = b"PK\x03\x04" + b"\x00" * 500
 def app_client(tmp_path, monkeypatch):
     """Spin up the app in an isolated working directory with a fresh DB."""
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("GRABARR_CONFIG_PATH", str(tmp_path / "nonexistent.yaml"))
     monkeypatch.setenv("GRABARR_SERVER__DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("GRABARR_SERVER__DOWNLOADS_DIR", str(tmp_path / "downloads"))
     # Default these tests to webseed so the BEP-19 url-list assertions hold.
