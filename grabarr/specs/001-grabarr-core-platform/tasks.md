@@ -200,17 +200,17 @@ Single-project Python layout under the repository root; package is `grabarr/`, t
 
 **Independent Test**: Per `quickstart.md` §"AC demo 2" — grab a 200 MB mock source via `async_streaming` mode, assert the `.torrent` is returned in < 2 s and the background download completes with bytes flowing during the wait.
 
-- [ ] T092 [US2] Create `grabarr/downloads/async_streaming.py` — `AsyncStreamingDownloader.run(handle)`: pre-allocate file via `aiofiles`, start the source fetch in a background task, pre-compute the first piece's SHA-1 as soon as those bytes land, build the torrent with `create_torrent(piece_size=P)` where P comes from the ladder in research R-3, emit `have_piece` callbacks to libtorrent as background pieces complete.
-- [ ] T093 [US2] Create `grabarr/downloads/hybrid.py` — `HybridDownloader.run(handle)`: fetch `Content-Length` via HEAD, delegate to `SyncDownloader` if < `settings.download.hybrid_threshold_mb`, else to `AsyncStreamingDownloader`.
-- [ ] T094 [US2] Extend `grabarr/downloads/manager.py` dispatcher to handle `async_streaming` and `hybrid` modes; honour per-profile `download_mode_override`.
-- [ ] T095 [US2] Extend `grabarr/torrents/active_seed.py` — support partial-file seeding (`add_torrent` with `SEED_MODE` flag cleared; manually invoke `have_piece(i)` as background writes complete; flip to full-seed once all pieces are verified).
-- [ ] T096 [US2] Create `grabarr/torrents/webseed.py` — `WebseedGenerator.create(download)` emits a `.torrent` with `url-list = ["http://{host}/torznab/{slug}/seed/{token}"]` plus a dummy (but valid) announce URL so clients don't reject it.
-- [ ] T097 [US2] Extend `grabarr/api/torznab.py` — `/torznab/{slug}/seed/{token}` handler supporting `Range: bytes=X-Y` with 206 Partial Content, `HEAD` returning `Content-Length`, 404 for unknown tokens, 410 Gone for expired tokens.
-- [ ] T098 [US2] Extend `grabarr/torrents/server.py` dispatcher to route `settings.torrent.mode == "webseed"` to `WebseedGenerator`; honour per-profile `torrent_mode_override`.
-- [ ] T099 [US2] Extend `grabarr/downloads/service.py` to pass `settings.torrent.seed_retention_hours` through to `Torrent.expires_at` (enables the cleanup sweeper planned for Polish).
-- [ ] T100 [US2] Create `tests/integration/test_us2_async_streaming.py` — mock a 200 MB source with throttled body yielding 256 KiB chunks, assert torrent returns within 2 s, assert background file assembly completes and passes verification.
-- [ ] T101 [US2] Create `tests/integration/test_us2_hybrid_threshold.py` — two runs, one 10 MB (sync path taken), one 200 MB (async path taken); assert each resulting `.torrent` is valid and the file-on-disk hashes match.
-- [ ] T102 [US2] Create `tests/integration/test_us2_webseed.py` — generate a webseed torrent, hit `/seed/{token}` with a Range request, assert 206 response with correct bytes.
+- [X] T092 [US2] Create `grabarr/downloads/async_streaming.py` — `AsyncStreamingDownloader.run(handle)`: pre-allocate file via `aiofiles`, start the source fetch in a background task, pre-compute the first piece's SHA-1 as soon as those bytes land, build the torrent with `create_torrent(piece_size=P)` where P comes from the ladder in research R-3, emit `have_piece` callbacks to libtorrent as background pieces complete.
+- [X] T093 [US2] Create `grabarr/downloads/hybrid.py` — `HybridDownloader.run(handle)`: fetch `Content-Length` via HEAD, delegate to `SyncDownloader` if < `settings.download.hybrid_threshold_mb`, else to `AsyncStreamingDownloader`.
+- [X] T094 [US2] Extend `grabarr/downloads/manager.py` dispatcher to handle `async_streaming` and `hybrid` modes; honour per-profile `download_mode_override`.
+- [X] T095 [US2] Extend `grabarr/torrents/active_seed.py` — support partial-file seeding (`add_torrent` with `SEED_MODE` flag cleared; manually invoke `have_piece(i)` as background writes complete; flip to full-seed once all pieces are verified).
+- [X] T096 [US2] Create `grabarr/torrents/webseed.py` — `WebseedGenerator.create(download)` emits a `.torrent` with `url-list = ["http://{host}/torznab/{slug}/seed/{token}"]` plus a dummy (but valid) announce URL so clients don't reject it.
+- [X] T097 [US2] Extend `grabarr/api/torznab.py` — `/torznab/{slug}/seed/{token}` handler supporting `Range: bytes=X-Y` with 206 Partial Content, `HEAD` returning `Content-Length`, 404 for unknown tokens, 410 Gone for expired tokens.
+- [X] T098 [US2] Extend `grabarr/torrents/server.py` dispatcher to route `settings.torrent.mode == "webseed"` to `WebseedGenerator`; honour per-profile `torrent_mode_override`.
+- [X] T099 [US2] Extend `grabarr/downloads/service.py` to pass `settings.torrent.seed_retention_hours` through to `Torrent.expires_at` (enables the cleanup sweeper planned for Polish).
+- [X] T100 [US2] Create `tests/integration/test_us2_async_streaming.py` — mock a 200 MB source with throttled body yielding 256 KiB chunks, assert torrent returns within 2 s, assert background file assembly completes and passes verification.
+- [X] T101 [US2] Create `tests/integration/test_us2_hybrid_threshold.py` — two runs, one 10 MB (sync path taken), one 200 MB (async path taken); assert each resulting `.torrent` is valid and the file-on-disk hashes match.
+- [X] T102 [US2] Create `tests/integration/test_us2_webseed.py` — generate a webseed torrent, hit `/seed/{token}` with a Range request, assert 206 response with correct bytes.
 
 **Checkpoint**: Both P1 stories complete. Grabarr handles small and large downloads, both torrent modes, and both Phase-3 + Phase-4 acceptance tests green. v1.0 beta is releasable.
 

@@ -28,8 +28,9 @@ from grabarr.core.enums import DownloadMode, DownloadStatus, MediaType, TorrentM
 from grabarr.core.logging import setup_logger
 from grabarr.core.models import SearchResult
 from grabarr.db.session import session_scope
+from grabarr.downloads.manager import run_download
 from grabarr.downloads.models import Download
-from grabarr.downloads.sync import SyncDownloadFailed, sync_download
+from grabarr.downloads.sync import SyncDownloadFailed
 from grabarr.profiles.models import Profile
 from grabarr.profiles.service import get_adapter_instance
 from grabarr.torrents.models import Torrent
@@ -111,7 +112,7 @@ async def prepare_and_generate_torrent(
         external_id = dl.external_id
         source_id = dl.source_id
         profile_slug = slug
-        # Resolve torrent mode: profile override → settings default → webseed.
+        # Resolve modes: profile override → env default.
         profile_row = await session.execute(
             select(Profile).where(Profile.slug == slug)
         )
@@ -124,6 +125,14 @@ async def prepare_and_generate_torrent(
             torrent_mode = TorrentMode(torrent_mode_str)
         except ValueError:
             torrent_mode = TorrentMode.WEBSEED
+        download_mode_str = (
+            profile.download_mode_override
+            or _resolve_default_download_mode()
+        )
+        try:
+            download_mode = DownloadMode(download_mode_str)
+        except ValueError:
+            download_mode = DownloadMode.SYNC
 
     adapter = get_adapter_instance(source_id)
     if adapter is None:
@@ -139,11 +148,12 @@ async def prepare_and_generate_torrent(
         raise
     await _annotate_resolve(token, size=info.size_bytes, content_type=info.content_type)
 
-    # 3. Sync download + verify.
+    # 3. Download (sync/async_streaming/hybrid per the resolved mode).
     await _set_status(token, DownloadStatus.DOWNLOADING)
     expected_format = _format_from_filename_hint(info.filename_hint) or None
     try:
-        final_path, size_bytes, content_type, report = await sync_download(
+        final_path, size_bytes, content_type, report = await run_download(
+            mode=download_mode,
             info=info,
             token=token,
             downloads_root=_downloads_root(),
@@ -177,6 +187,7 @@ async def prepare_and_generate_torrent(
         dl.file_path = str(final_path)
         dl.info_hash = blob.info_hash
         dl.torrent_mode = blob.mode.value
+        dl.download_mode = download_mode.value
         dl.status = DownloadStatus.SEEDING.value
         dl.resolved_at = now
         dl.ready_at = now
@@ -256,6 +267,16 @@ def _resolve_default_torrent_mode() -> str:
     import os
 
     return os.environ.get("GRABARR_TORRENT_MODE", TorrentMode.ACTIVE_SEED.value)
+
+
+def _resolve_default_download_mode() -> str:
+    """Read the default download mode from env (future: settings table).
+
+    Shipping default is ``sync`` per the Clarifications session.
+    """
+    import os
+
+    return os.environ.get("GRABARR_DOWNLOAD_MODE", DownloadMode.SYNC.value)
 
 
 async def _set_status(token: str, status: DownloadStatus) -> None:
