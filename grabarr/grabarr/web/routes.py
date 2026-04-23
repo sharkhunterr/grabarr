@@ -105,6 +105,40 @@ async def profile_new(request: Request) -> HTMLResponse:
     )
 
 
+@router.get("/sources", response_class=HTMLResponse)
+async def sources_page(request: Request) -> HTMLResponse:
+    """Adapter list + health + config schema."""
+    import httpx
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=request.app),
+        base_url=str(request.base_url).rstrip("/"),
+    ) as client:
+        r = await client.get("/api/sources")
+    data = r.json()
+    return templates.TemplateResponse(
+        request, "sources.html", {"items": data.get("items", [])}
+    )
+
+
+@router.get("/notifications", response_class=HTMLResponse)
+async def notifications_page(request: Request) -> HTMLResponse:
+    """Apprise URL list + recent dispatch log."""
+    import httpx
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=request.app),
+        base_url=str(request.base_url).rstrip("/"),
+    ) as client:
+        urls = (await client.get("/api/notifications/apprise")).json()
+        log = (await client.get("/api/notifications/log?size=20")).json()
+    return templates.TemplateResponse(
+        request,
+        "notifications.html",
+        {"urls": urls.get("items", []), "log_items": log.get("items", [])},
+    )
+
+
 @router.get("/profiles/{slug}/edit", response_class=HTMLResponse)
 async def profile_edit(slug: str, request: Request) -> HTMLResponse:
     """Edit form for an existing profile."""

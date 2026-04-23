@@ -184,6 +184,215 @@ async def api_test_profile(
     return await run_test_profile(profile, query, limit=limit)
 
 
+# ---- Sources -----------------------------------------------------------
+
+
+@router.get("/sources")
+async def api_list_sources() -> dict:
+    """List every registered adapter + its health + config schema."""
+    from dataclasses import asdict
+
+    from sqlalchemy import select
+
+    from grabarr.adapters.health_model import AdapterHealthRow
+    from grabarr.core.registry import get_registered_adapters
+    from grabarr.db.session import session_scope
+    from grabarr.profiles.service import get_adapter_instance
+
+    adapters = get_registered_adapters()
+    async with session_scope() as session:
+        rows = await session.execute(select(AdapterHealthRow))
+        health_by_id = {r.adapter_id: r for r in rows.scalars().all()}
+
+    items = []
+    for aid, cls in sorted(adapters.items()):
+        instance = get_adapter_instance(aid)
+        schema = instance.get_config_schema() if instance else None
+        quota = None
+        if instance is not None:
+            try:
+                q = await instance.get_quota_status()
+                if q is not None:
+                    quota = {
+                        "used": q.used,
+                        "limit": q.limit,
+                        "resets_at": q.resets_at.isoformat(),
+                    }
+            except Exception:  # noqa: BLE001
+                quota = None
+        h = health_by_id.get(aid)
+        items.append(
+            {
+                "id": aid,
+                "display_name": cls.display_name,
+                "supported_media_types": sorted(m.value for m in cls.supported_media_types),
+                "requires_cf_bypass": cls.requires_cf_bypass,
+                "supports_member_key": cls.supports_member_key,
+                "supports_authentication": cls.supports_authentication,
+                "health": {
+                    "status": h.status if h else "unknown",
+                    "reason": h.reason if h else None,
+                    "last_check_at": h.last_check_at.isoformat() if h and h.last_check_at else None,
+                    "consecutive_failures": h.consecutive_failures if h else 0,
+                },
+                "quota": quota,
+                "config_schema": {
+                    "fields": [asdict(f) for f in (schema.fields if schema else [])],
+                },
+            }
+        )
+    return {"items": items}
+
+
+@router.post("/sources/{source_id}/test")
+async def api_test_source(source_id: str) -> dict:
+    """Probe an adapter synchronously and return its new HealthStatus."""
+    from grabarr.adapters.health import probe_once
+    from grabarr.adapters.health_model import AdapterHealthRow
+    from grabarr.db.session import session_scope
+    from sqlalchemy import select
+
+    await probe_once(source_id)
+    async with session_scope() as session:
+        row = await session.execute(
+            select(AdapterHealthRow).where(AdapterHealthRow.adapter_id == source_id)
+        )
+        h = row.scalar_one_or_none()
+    if h is None:
+        raise HTTPException(status_code=404, detail=f"adapter '{source_id}' not registered")
+    return {
+        "status": h.status,
+        "reason": h.reason,
+        "last_check_at": h.last_check_at.isoformat(),
+        "consecutive_failures": h.consecutive_failures,
+        "last_error_message": h.last_error_message,
+    }
+
+
+# ---- Notifications -----------------------------------------------------
+
+
+@router.get("/notifications/apprise")
+async def api_list_apprise() -> dict:
+    from sqlalchemy import select
+
+    from grabarr.db.session import session_scope
+    from grabarr.notifications.encryption import decrypt, mask
+    from grabarr.notifications.models import AppriseUrl
+
+    async with session_scope() as session:
+        rows = await session.execute(select(AppriseUrl))
+        items = list(rows.scalars().all())
+    out = []
+    for row in items:
+        try:
+            plaintext = decrypt(row.url_encrypted)
+        except Exception:  # noqa: BLE001
+            plaintext = ""
+        out.append(
+            {
+                "id": row.id,
+                "label": row.label,
+                "url_masked": mask(plaintext) if plaintext else "***",
+                "subscribed_events": row.subscribed_events,
+                "enabled": row.enabled,
+            }
+        )
+    return {"items": out}
+
+
+@router.post("/notifications/apprise", status_code=201)
+async def api_create_apprise(body: dict[str, Any] = Body(...)) -> dict:
+    from grabarr.db.session import session_scope
+    from grabarr.notifications.encryption import encrypt
+    from grabarr.notifications.models import AppriseUrl
+
+    label = body.get("label")
+    url = body.get("url")
+    subscribed = body.get("subscribed_events") or []
+    if not label or not url or not isinstance(subscribed, list):
+        raise HTTPException(status_code=400, detail="label, url, subscribed_events required")
+    async with session_scope() as session:
+        obj = AppriseUrl(
+            label=label,
+            url_encrypted=encrypt(url),
+            subscribed_events=subscribed,
+            enabled=bool(body.get("enabled", True)),
+        )
+        session.add(obj)
+        await session.flush()
+        return {"id": obj.id, "label": obj.label}
+
+
+@router.delete("/notifications/apprise/{url_id}", status_code=204)
+async def api_delete_apprise(url_id: str) -> None:
+    from sqlalchemy import select
+
+    from grabarr.db.session import session_scope
+    from grabarr.notifications.models import AppriseUrl
+
+    async with session_scope() as session:
+        row = await session.execute(select(AppriseUrl).where(AppriseUrl.id == url_id))
+        obj = row.scalar_one_or_none()
+        if obj is None:
+            raise HTTPException(status_code=404, detail="not found")
+        await session.delete(obj)
+
+
+@router.post("/notifications/apprise/{url_id}/test")
+async def api_test_apprise(url_id: str) -> dict:
+    from grabarr.core.enums import NotificationEvent, NotificationSeverity
+    from grabarr.notifications.dispatcher import NotificationPayload, dispatch
+
+    await dispatch(
+        NotificationPayload(
+            event=NotificationEvent.SOURCE_RECOVERED,  # benign test event
+            title="Grabarr test notification",
+            body=f"Test dispatch from Apprise URL {url_id}.",
+            severity=NotificationSeverity.INFO,
+        ),
+        cooldown_minutes=0,
+    )
+    return {"dispatched": True}
+
+
+@router.get("/notifications/log")
+async def api_notifications_log(
+    page: int = Query(1, ge=1),
+    size: int = Query(50, ge=1, le=200),
+    event: str = Query(""),
+) -> dict:
+    from sqlalchemy import desc, select
+
+    from grabarr.db.session import session_scope
+    from grabarr.notifications.models import NotificationLog
+
+    async with session_scope() as session:
+        q = select(NotificationLog).order_by(desc(NotificationLog.dispatched_at))
+        if event:
+            q = q.where(NotificationLog.event_type == event)
+        rows = await session.execute(q.offset((page - 1) * size).limit(size))
+        items = list(rows.scalars().all())
+    return {
+        "page": page,
+        "size": size,
+        "items": [
+            {
+                "id": r.id,
+                "event_type": r.event_type,
+                "source_id": r.source_id,
+                "title": r.title,
+                "body": r.body,
+                "severity": r.severity,
+                "dispatched_at": r.dispatched_at.isoformat(),
+                "dispatch_status": r.dispatch_status,
+                "coalesced": r.coalesced,
+            }
+            for r in items
+        ],
+    }
+
+
 @router.get("/prowlarr-config")
 async def api_prowlarr_config(
     request: Request,

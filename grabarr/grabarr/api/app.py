@@ -123,11 +123,18 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
             _log.info("seeded %d default profiles", len(slugs))
     # 5. Bridge Shelfmark vendored code to the settings backend.
     install_shelfmark_bridge(_SettingsBackend())
+
+    # 6. Start adapter health monitor in the background.
+    from grabarr.adapters.health import start_monitor, stop_monitor
+
+    await start_monitor(period_seconds=60)
+
     _log.info("Grabarr %s ready", __version__)
 
     yield
 
     _log.info("Grabarr shutting down")
+    await stop_monitor()
     # Persist libtorrent session state if the active-seed server was booted.
     try:
         from grabarr.torrents.active_seed import shutdown_active_seed_server

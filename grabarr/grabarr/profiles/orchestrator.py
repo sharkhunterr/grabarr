@@ -144,7 +144,9 @@ async def orchestrate_search(
     sources = _sources_from_profile(profile)
     mode = profile.mode
 
-    # Filter to adapters that are registered + compatible + authorised.
+    from grabarr.adapters.health import is_adapter_healthy
+
+    # Filter to adapters that are registered + compatible + authorised + healthy.
     eligible: list[tuple[object, SourcePriorityEntry]] = []
     for entry in sources:
         if not entry.enabled:
@@ -163,6 +165,9 @@ async def orchestrate_search(
             and getattr(adapter, "supports_member_key", False)
             and not getattr(adapter, "_member_key", None)
         ):
+            continue
+        if not await is_adapter_healthy(entry.source_id):
+            _log.info("orchestrator: %s circuit-broken — skipping", entry.source_id)
             continue
         eligible.append((adapter, entry))
 

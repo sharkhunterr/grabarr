@@ -1,22 +1,30 @@
 """Z-Library source adapter.
 
 Spec FR-1.3: wrapper over vendored Shelfmark cascade + Grabarr-specific
-quota tracking and cookie-expired detection (the latter lands in US4).
+quota tracking (persisted, resets at midnight UTC) and cookie-expired
+detection.
 """
 
 from __future__ import annotations
+
+import datetime as dt
+
+from sqlalchemy import select
 
 from grabarr.adapters.anna_archive import AnnaArchiveAdapter
 from grabarr.adapters.base import (
     ConfigField,
     ConfigSchema,
     MediaType,
+    QuotaStatus,
     SearchFilters,
     SearchResult,
 )
+from grabarr.adapters.health_model import ZLibraryQuota
 from grabarr.core.logging import setup_logger
 from grabarr.core.rate_limit import rate_limiter
 from grabarr.core.registry import register_adapter
+from grabarr.db.session import session_scope
 
 _log = setup_logger(__name__)
 
@@ -67,6 +75,59 @@ class ZLibraryAdapter(AnnaArchiveAdapter):
             for r in results
         ]
 
+    async def get_quota_status(self) -> QuotaStatus | None:
+        """Return today's download counter (FR-005).
+
+        Row is keyed by UTC date; a new row appears automatically at
+        the next day's first access. ``limit`` comes from the
+        settings-backed rate-limit default but is not enforced here;
+        the orchestrator checks ``used >= limit`` via
+        :meth:`is_exhausted` below.
+        """
+        today = dt.datetime.now(dt.UTC).date()
+        async with session_scope() as session:
+            row = await session.execute(
+                select(ZLibraryQuota).where(ZLibraryQuota.date_utc == today)
+            )
+            obj = row.scalar_one_or_none()
+            if obj is None:
+                return QuotaStatus(
+                    used=0,
+                    limit=10,
+                    resets_at=_next_midnight_utc(),
+                )
+            return QuotaStatus(
+                used=obj.downloads_used,
+                limit=obj.downloads_max,
+                resets_at=obj.reset_at_utc,
+            )
+
+    async def is_exhausted(self) -> bool:
+        quota = await self.get_quota_status()
+        if quota is None:
+            return False
+        return quota.used >= quota.limit
+
+    async def record_download(self) -> None:
+        """Bump today's used counter by 1 (called on successful download)."""
+        today = dt.datetime.now(dt.UTC).date()
+        async with session_scope() as session:
+            row = await session.execute(
+                select(ZLibraryQuota).where(ZLibraryQuota.date_utc == today)
+            )
+            obj = row.scalar_one_or_none()
+            if obj is None:
+                session.add(
+                    ZLibraryQuota(
+                        date_utc=today,
+                        downloads_used=1,
+                        downloads_max=10,
+                        reset_at_utc=_next_midnight_utc(),
+                    )
+                )
+            else:
+                obj.downloads_used += 1
+
     def get_config_schema(self) -> ConfigSchema:
         return ConfigSchema(
             fields=[
@@ -93,3 +154,8 @@ class ZLibraryAdapter(AnnaArchiveAdapter):
                 ),
             ]
         )
+
+
+def _next_midnight_utc() -> dt.datetime:
+    now = dt.datetime.now(dt.UTC)
+    return (now + dt.timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)

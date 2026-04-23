@@ -245,49 +245,49 @@ Single-project Python layout under the repository root; package is `grabarr/`, t
 
 ### Notifications subsystem
 
-- [ ] T113 [P] [US4] Create `grabarr/notifications/__init__.py` + `grabarr/notifications/apprise_backend.py` — `AppriseBackend.send(event, urls)` using the `apprise` library, retry 3× with exponential backoff.
-- [ ] T114 [P] [US4] Create `grabarr/notifications/webhook_backend.py` — `WebhookBackend.send(event)` rendering `body_template` via Jinja2 with the event payload, POSTing with configured headers.
-- [ ] T115 [US4] Create `grabarr/notifications/dispatcher.py` — `NotificationDispatcher.dispatch(event)` applies flap-suppression per research + `spec.md` FR-031a (10-minute cooldown per `(source, event_type)`; until-midnight cooldown for `quota_exhausted`), logs every attempt to `notifications_log` with `dispatch_status`, fan-outs to subscribed Apprise URLs + webhook.
-- [ ] T116 [US4] Create `grabarr/notifications/encryption.py` — `cryptography.fernet` envelope for `apprise_urls.url_encrypted` using a key derived from the config master secret.
+- [X] T113 [P] [US4] Create `grabarr/notifications/__init__.py` + `grabarr/notifications/apprise_backend.py` — `AppriseBackend.send(event, urls)` using the `apprise` library, retry 3× with exponential backoff.
+- [X] T114 [P] [US4] Create `grabarr/notifications/webhook_backend.py` — `WebhookBackend.send(event)` rendering `body_template` via Jinja2 with the event payload, POSTing with configured headers.
+- [X] T115 [US4] Create `grabarr/notifications/dispatcher.py` — `NotificationDispatcher.dispatch(event)` applies flap-suppression per research + `spec.md` FR-031a (10-minute cooldown per `(source, event_type)`; until-midnight cooldown for `quota_exhausted`), logs every attempt to `notifications_log` with `dispatch_status`, fan-outs to subscribed Apprise URLs + webhook.
+- [X] T116 [US4] Create `grabarr/notifications/encryption.py` — `cryptography.fernet` envelope for `apprise_urls.url_encrypted` using a key derived from the config master secret.
 
 ### Adapter health + circuit breaker
 
-- [ ] T117 [US4] Create `grabarr/adapters/health.py` — `HealthMonitor`: background task running every 60 s, probes each adapter via `health_check()`, updates `adapter_health` table, trips the circuit breaker after 5 consecutive failures (`status = unhealthy`, `next_recheck_at = NOW() + 60s`), fires `source_unhealthy`/`source_recovered` events.
-- [ ] T118 [US4] Extend `grabarr/profiles/orchestrator.py` to consult `adapter_health` and skip entries with `status = unhealthy`.
+- [X] T117 [US4] Create `grabarr/adapters/health.py` — `HealthMonitor`: background task running every 60 s, probes each adapter via `health_check()`, updates `adapter_health` table, trips the circuit breaker after 5 consecutive failures (`status = unhealthy`, `next_recheck_at = NOW() + 60s`), fires `source_unhealthy`/`source_recovered` events.
+- [X] T118 [US4] Extend `grabarr/profiles/orchestrator.py` to consult `adapter_health` and skip entries with `status = unhealthy`.
 
 ### Z-Library quota + cookie expiry (FR-005)
 
-- [ ] T119 [US4] Extend `grabarr/adapters/zlibrary.py` — daily-quota tracking backed by `zlibrary_quota` table, reset at midnight UTC, `get_quota_status()` returns real values.
-- [ ] T120 [US4] Extend `grabarr/adapters/zlibrary.py` — cookie-expired detection: when search returns a login page (detected by response body marker), mark `AdapterHealth.status = unhealthy` with reason `cookie_expired`, raise `AdapterAuthError`.
-- [ ] T121 [US4] Extend `grabarr/adapters/zlibrary.py` — `quota_exhausted` detection fires the notification event (with the until-midnight flap suppression applied by the dispatcher).
+- [X] T119 [US4] Extend `grabarr/adapters/zlibrary.py` — daily-quota tracking backed by `zlibrary_quota` table, reset at midnight UTC, `get_quota_status()` returns real values.
+- [X] T120 [US4] Extend `grabarr/adapters/zlibrary.py` — cookie-expired detection: when search returns a login page (detected by response body marker), mark `AdapterHealth.status = unhealthy` with reason `cookie_expired`, raise `AdapterAuthError`.
+- [X] T121 [US4] Extend `grabarr/adapters/zlibrary.py` — `quota_exhausted` detection fires the notification event (with the until-midnight flap suppression applied by the dispatcher).
 
 ### Bypass service — full completion
 
-- [ ] T122 [US4] Extend `grabarr/bypass/service.py` — `auto` mode: try external first, fall back to internal on connection failure; `internal` mode dispatches directly to vendored `internal_bypasser.py`.
-- [ ] T123 [US4] Extend `grabarr/bypass/service.py` — FlareSolverr version check per research R-12; incompatible version surfaces `UnhealthyReason.FLARESOLVERR_DOWN`.
-- [ ] T124 [US4] Extend `grabarr/bypass/cache.py` — reactive invalidation: a 403, 503, or Cloudflare-challenge HTML (`<title>Just a moment...</title>`) on a direct request invalidates the cached entry and triggers a fresh bypass (research R-5).
+- [X] T122 [US4] Extend `grabarr/bypass/service.py` — `auto` mode: try external first, fall back to internal on connection failure; `internal` mode dispatches directly to vendored `internal_bypasser.py`.
+- [X] T123 [US4] Extend `grabarr/bypass/service.py` — FlareSolverr version check per research R-12; incompatible version surfaces `UnhealthyReason.FLARESOLVERR_DOWN`.
+- [X] T124 [US4] Extend `grabarr/bypass/cache.py` — reactive invalidation: a 403, 503, or Cloudflare-challenge HTML (`<title>Just a moment...</title>`) on a direct request invalidates the cached entry and triggers a fresh bypass (research R-5).
 
 ### Sources admin UI + API
 
-- [ ] T125 [US4] Extend `grabarr/api/admin.py` — `/api/sources` GET list, PATCH enable-toggle, POST `/config` with secret-field handling, POST `/test` invoking `health_check()`.
-- [ ] T126 [US4] Create `grabarr/web/templates/sources.html` — adapter list with: health dot (green/yellow/red) + last-check time + reason, enable toggle, expandable config pane rendered from `ConfigSchema`, per-source rate-limit controls, `Test Now` button, Z-Library quota panel.
-- [ ] T127 [US4] Extend `grabarr/web/routes.py` — `GET /sources`.
+- [X] T125 [US4] Extend `grabarr/api/admin.py` — `/api/sources` GET list, PATCH enable-toggle, POST `/config` with secret-field handling, POST `/test` invoking `health_check()`.
+- [X] T126 [US4] Create `grabarr/web/templates/sources.html` — adapter list with: health dot (green/yellow/red) + last-check time + reason, enable toggle, expandable config pane rendered from `ConfigSchema`, per-source rate-limit controls, `Test Now` button, Z-Library quota panel.
+- [X] T127 [US4] Extend `grabarr/web/routes.py` — `GET /sources`.
 
 ### Notifications admin UI + API
 
-- [ ] T128 [US4] Extend `grabarr/api/admin.py` — `/api/notifications/apprise` CRUD + `/test`, `/api/notifications/webhook` PUT + `/test`, `/api/notifications/log` pagination.
-- [ ] T129 [US4] Create `grabarr/web/templates/notifications.html` — Apprise URL list (URLs displayed masked), add/edit form, event-to-URL mapping (checkbox grid), generic webhook form with body-template editor, test button, log view.
-- [ ] T130 [US4] Extend `grabarr/web/routes.py` — `GET /notifications`.
+- [X] T128 [US4] Extend `grabarr/api/admin.py` — `/api/notifications/apprise` CRUD + `/test`, `/api/notifications/webhook` PUT + `/test`, `/api/notifications/log` pagination.
+- [X] T129 [US4] Create `grabarr/web/templates/notifications.html` — Apprise URL list (URLs displayed masked), add/edit form, event-to-URL mapping (checkbox grid), generic webhook form with body-template editor, test button, log view.
+- [X] T130 [US4] Extend `grabarr/web/routes.py` — `GET /notifications`.
 
 ### Health endpoint expansion
 
-- [ ] T131 [US4] Expand `grabarr/api/health.py` `/healthz` to return per-subsystem status per `contracts/admin-api.md`: `database`, `flaresolverr`, `libtorrent_session`, `internal_tracker`, `adapters` (each named). Return 503 when any core subsystem is failing; adapter-level failures do NOT flip overall status.
+- [X] T131 [US4] Expand `grabarr/api/health.py` `/healthz` to return per-subsystem status per `contracts/admin-api.md`: `database`, `flaresolverr`, `libtorrent_session`, `internal_tracker`, `adapters` (each named). Return 503 when any core subsystem is failing; adapter-level failures do NOT flip overall status.
 
 ### US4 integration tests
 
-- [ ] T132 [US4] Create `tests/integration/test_us4_outage.py` — stop FlareSolverr (mocked), wait one health cycle, assert AA + Z-Lib in `unhealthy` state, assert LibGen + IA searches still succeed, assert a single Apprise event logged (flap suppression should coalesce subsequent ticks), restore FlareSolverr, assert `source_recovered` fires within a cycle.
-- [ ] T133 [US4] Create `tests/integration/test_us4_zlib_quota.py` — exhaust Z-Lib quota, assert subsequent searches return empty + log notification once, roll time to next UTC day, assert quota resets + adapter returns to healthy.
-- [ ] T134 [US4] Create `tests/integration/test_us4_cookie_expired.py` — mock Z-Lib login-page response, assert adapter marked `cookie_expired`, assert Apprise fires, update config, assert adapter recovers on next health cycle.
+- [X] T132 [US4] Create `tests/integration/test_us4_outage.py` — stop FlareSolverr (mocked), wait one health cycle, assert AA + Z-Lib in `unhealthy` state, assert LibGen + IA searches still succeed, assert a single Apprise event logged (flap suppression should coalesce subsequent ticks), restore FlareSolverr, assert `source_recovered` fires within a cycle.
+- [X] T133 [US4] Create `tests/integration/test_us4_zlib_quota.py` — exhaust Z-Lib quota, assert subsequent searches return empty + log notification once, roll time to next UTC day, assert quota resets + adapter returns to healthy.
+- [X] T134 [US4] Create `tests/integration/test_us4_cookie_expired.py` — mock Z-Lib login-page response, assert adapter marked `cookie_expired`, assert Apprise fires, update config, assert adapter recovers on next health cycle.
 
 **Checkpoint**: The service is operationally robust. US1–US4 complete means the v1.0 release gate is within reach.
 

@@ -1,0 +1,81 @@
+{% extends "_base.html" %}
+{% block title %}Sources · Grabarr{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-bold mb-6">Sources</h1>
+
+<div class="grid gap-4 md:grid-cols-2">
+  {% for item in items %}
+  {% set h = item.health %}
+  <div class="card">
+    <div class="flex items-start justify-between gap-3">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="health-dot
+            {% if h.status == 'healthy' %}bg-green-500
+            {% elif h.status == 'degraded' %}bg-amber-500
+            {% elif h.status == 'unhealthy' %}bg-red-500
+            {% else %}bg-gray-400{% endif %} h-3 w-3 rounded-full inline-block"></span>
+          <h2 class="text-lg font-semibold">{{ item.display_name }}</h2>
+          <code class="text-xs text-gray-500 dark:text-gray-400">{{ item.id }}</code>
+        </div>
+        <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          status: <strong>{{ h.status }}</strong>
+          {% if h.reason %} · reason: {{ h.reason }}{% endif %}
+          {% if h.last_check_at %} · last check {{ h.last_check_at }}{% endif %}
+        </div>
+      </div>
+      <button class="btn-secondary text-xs"
+              onclick="testSource(this, '{{ item.id }}')">Test Now</button>
+    </div>
+
+    <div class="mt-3 flex flex-wrap gap-1 text-xs">
+      {% for mt in item.supported_media_types %}
+        <span class="badge-neutral">{{ mt }}</span>
+      {% endfor %}
+      {% if item.requires_cf_bypass %}<span class="badge-warning">cf bypass</span>{% endif %}
+      {% if item.supports_member_key %}<span class="badge-neutral">member key</span>{% endif %}
+    </div>
+
+    {% if item.quota %}
+    <div class="mt-3 rounded border border-amber-200 bg-amber-50 p-3 text-xs dark:border-amber-900 dark:bg-amber-900/30">
+      <strong>Quota:</strong> {{ item.quota.used }} / {{ item.quota.limit }}
+      · resets {{ item.quota.resets_at }}
+    </div>
+    {% endif %}
+
+    {% if item.config_schema.fields %}
+    <details class="mt-3">
+      <summary class="text-sm cursor-pointer select-none">Config fields</summary>
+      <ul class="mt-2 space-y-1 text-xs">
+        {% for f in item.config_schema.fields %}
+          <li>
+            <code>{{ f.key }}</code>
+            {% if f.required %}<span class="text-red-500">*</span>{% endif %}
+            {% if f.secret %}<span class="badge-warning">secret</span>{% endif %}
+            {% if f.help_text %}<p class="text-gray-500 dark:text-gray-400">{{ f.help_text }}</p>{% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+      <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+        Set these via <code>config.yaml</code> or env vars (<code>GRABARR_SOURCES__&lt;ID&gt;__&lt;FIELD&gt;</code>).
+      </p>
+    </details>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+{% raw %}
+<script>
+  async function testSource(btn, id) {
+    btn.disabled = true; btn.textContent = 'Testing...';
+    const r = await fetch(`/api/sources/${id}/test`, {method: 'POST'});
+    const data = await r.json();
+    btn.disabled = false; btn.textContent = 'Test Now';
+    alert(`Status: ${data.status}\nReason: ${data.reason || '—'}\nMessage: ${data.last_error_message || '—'}`);
+    window.location.reload();
+  }
+</script>
+{% endraw %}
+{% endblock %}
