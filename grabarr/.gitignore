@@ -1,0 +1,72 @@
+# ---- Python ---------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+*.pyd
+dist/
+build/
+.eggs/
+
+# ---- Virtualenvs ----------------------------------------------------------
+.venv/
+venv/
+env/
+.python-version
+
+# ---- uv / package managers ------------------------------------------------
+.uv/
+
+# ---- Tests / coverage -----------------------------------------------------
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+coverage.xml
+*.cover
+.hypothesis/
+.mypy_cache/
+.ruff_cache/
+
+# ---- Grabarr runtime state (never check these in) -------------------------
+/config.yaml
+/config.local.yaml
+/data/
+/downloads/
+*.session_state
+*.session.state
+*.fastresume
+
+# ---- Tailwind (compiled output) -------------------------------------------
+grabarr/web/static/css/tailwind.build.css
+
+# ---- Tailwind binary (downloaded by Makefile) -----------------------------
+/tailwindcss
+/tailwindcss-*
+
+# ---- Logs -----------------------------------------------------------------
+*.log
+logs/
+
+# ---- Editors / OS ---------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ---- Node (used only by optional Tailwind devtools if anyone wants them) --
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# ---- Docker ---------------------------------------------------------------
+# Keep Dockerfile, compose files, and .dockerignore tracked.
+
+# ---- Alembic workaround ---------------------------------------------------
+# Migrations are checked in; only ignore the transient compiled dirs.

@@ -18,6 +18,11 @@ from Shelfmark, ~40% new Grabarr-specific code. See constitution v1.0.0."
 - Q: Which endpoints require a reverse proxy vs which must be publicly reachable? → A: All endpoints are equally unauthenticated by Grabarr itself (except the per-profile API key on `/torznab/{slug}/api`). Grabarr assumes network isolation; if the operator wants edge auth, they put a reverse proxy in front of whichever subset they choose. No in-app split between admin and public surfaces.
 - Q: How is notification spam during source flapping prevented? → A: 10-minute cooldown per `(source, event_type)` — first transition fires, repeats within the window are coalesced. `quota_exhausted` has an until-midnight-UTC cooldown (matching the quota reset boundary).
 
+### Session 2026-04-23 (follow-up, scope discovery)
+
+- Q: What Shelfmark upstream version is vendored? → A: tag **v1.2.1** (commit `019d36b27e3e8576eb4a4d6d76090ee442a05a44`, released 2026-03-21) — the last release on Python 3.10 before Shelfmark migrated to Python 3.14 + PEP 758 (`except A, B:` without parens). Vendoring from v1.2.1 avoids any syntax adaptation of upstream code on Grabarr's Python 3.12+ floor.
+- Q: How many files are vendored? → A: **41 files** — the full transitive closure of `shelfmark.*` imports reachable from the eight spec-named seed files (bypass module, `core/mirrors.py`, `core/naming.py`, `release_sources/direct_download.py`, `release_sources/__init__.py`). Extras include `core/utils.py`, `core/models.py`, `core/queue.py`, `core/search_plan.py`, `config/env.py`, `config/settings.py`, `download/network.py`, `download/http.py`, and related support modules. They are copied verbatim; only import-path rewrites per Constitution §III clause 3.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 — Homelab Deployment and First-Run Indexing (Priority: P1)
@@ -250,7 +255,12 @@ file.
   Constitution §"Vendoring Procedure": file-for-file copy, MIT headers
   preserved, `ATTRIBUTION.md` present with upstream commit SHA, imports
   rewritten from `shelfmark.X` to `grabarr.vendor.shelfmark.X`, logic
-  untouched.
+  untouched. The vendored set is the **full transitive import closure** of
+  the eight spec-named seed files — approximately 41 files as of upstream
+  tag `v1.2.1` — NOT a hand-pruned minimum. This is because Shelfmark's
+  `release_sources/direct_download.py` depends deeply on `core/utils.py`,
+  `core/models.py`, `download/network.py`, and related support modules;
+  pruning any of them breaks imports and violates "logic untouched".
 - **FR-004**: For Anna's Archive, every behaviour listed in Constitution
   Article VII MUST be preserved by delegation to vendored code: sub-source
   taxonomy (`aa-fast`, `aa-slow-nowait`, `aa-slow-wait`, `aa-slow`,

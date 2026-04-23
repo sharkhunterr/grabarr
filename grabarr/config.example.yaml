@@ -1,0 +1,120 @@
+# Grabarr — example configuration
+#
+# This file is loaded ONCE at startup and seeds the database on first run.
+# Once the database exists, UI-mutable settings live in the `settings` table
+# (see research R-8). The credentials below (AA member key, Z-Library
+# cookies, Apprise URLs, etc.) are the exception — they are always read from
+# this file or the corresponding GRABARR_* environment variable.
+#
+# Precedence: environment variable > config.yaml > built-in default.
+# Every env var is the upper-snake-case of the dotted key prefixed with
+# GRABARR_, e.g. sources.anna_archive.member_key → GRABARR_SOURCES__ANNA_ARCHIVE__MEMBER_KEY.
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+logging:
+  # Levels: DEBUG | INFO | WARNING | ERROR | CRITICAL
+  level: INFO
+  # Format: "text" (coloured human-readable) | "json" (structured)
+  format: text
+  # Per-module overrides, e.g.:
+  # modules:
+  #   grabarr.adapters.anna_archive: DEBUG
+  modules: {}
+
+# ---------------------------------------------------------------------------
+# Server (boot-time only — cannot be changed from the UI)
+# ---------------------------------------------------------------------------
+server:
+  host: "0.0.0.0"
+  port: 8080
+  # Path where the SQLite DB is stored. Inside the container this is
+  # typically /data/grabarr.db (mapped to ./data:/data on the host).
+  data_dir: "/data"
+  # Path where downloaded files are staged.
+  downloads_dir: "/downloads"
+
+# ---------------------------------------------------------------------------
+# Source credentials (never logged; redacted in UI)
+# ---------------------------------------------------------------------------
+sources:
+  anna_archive:
+    # Donator / member key for the /fast_download API path.
+    # Free users may leave this empty — Grabarr will fall back to the
+    # slow-tier cascade.
+    member_key: ""
+
+  zlibrary:
+    # Cookie-based auth. Leave both empty to disable Z-Library; the
+    # adapter will be marked unhealthy until configured.
+    # Obtain from your Z-Library account → Settings → Cookies.
+    remix_userid: ""
+    remix_userkey: ""
+
+  # LibGen has no per-user credentials — nothing to configure here.
+  # Internet Archive: configure contact email via UI → Settings → Metadata.
+
+# ---------------------------------------------------------------------------
+# Master encryption key
+# ---------------------------------------------------------------------------
+# Used to encrypt Apprise URLs at rest (stored in `apprise_urls` table).
+# If omitted, a new key is generated at first boot and stored at
+# {server.data_dir}/.fernet_key. For disaster recovery you can copy
+# the key here instead of trusting the file system.
+#
+# Generate a key with:
+#   python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'
+master_secret: ""
+
+# ---------------------------------------------------------------------------
+# Initial settings seeded to the `settings` table on first boot
+# ---------------------------------------------------------------------------
+# After the database exists, change these via Admin UI → Settings, NOT by
+# editing this file. The file is only consulted for the very first boot or
+# if the `settings` table is empty (e.g. after a restore).
+initial_settings:
+  # --- Downloads ---
+  "download.mode": "sync"                       # clarified default
+  "download.hybrid_threshold_mb": 50
+  "download.timeout_seconds": 300
+  "download.max_size_gb": 5.0
+
+  # --- Torrents ---
+  "torrent.mode": "active_seed"                 # constitution default
+  "torrent.tracker_port": 8999
+  "torrent.listen_port_min": 45000
+  "torrent.listen_port_max": 45100
+  "torrent.seed_retention_hours": 24            # clarified default
+  "torrent.max_concurrent_seeds": 100
+
+  # --- Bypass ---
+  "bypass.mode": "external"                     # clarified default
+  "bypass.flaresolverr_url": "http://flaresolverr:8191/v1"
+  "bypass.session_cache_ttl_min": 30
+
+  # --- Rate limits ---
+  "rate_limit.anna_archive.search_per_min": 30
+  "rate_limit.anna_archive.parallel_downloads": 2
+  "rate_limit.libgen.requests_per_min": 60
+  "rate_limit.zlibrary.requests_per_min": 10
+  "rate_limit.zlibrary.daily_quota": 10
+  "rate_limit.internet_archive.requests_per_min": 30
+
+  # --- Metadata ---
+  "metadata.ia_contact_email": ""               # operator must set
+  "metadata.user_agent_suffix": ""
+
+  # --- Notifications ---
+  "notifications.flap_cooldown_minutes": 10     # FR-031a
+
+  # --- Output paths (templated per media type) ---
+  "paths.output_template.ebook": "/downloads/ready/ebook/{profile_slug}/{sanitized_title}_{external_id}/{filename}"
+  "paths.output_template.audiobook": "/downloads/ready/audiobook/{profile_slug}/{sanitized_title}_{external_id}/{filename}"
+  "paths.output_template.comic": "/downloads/ready/comic/{profile_slug}/{sanitized_title}_{external_id}/{filename}"
+  "paths.output_template.magazine": "/downloads/ready/magazine/{profile_slug}/{sanitized_title}_{external_id}/{filename}"
+  "paths.output_template.music": "/downloads/ready/music/{profile_slug}/{sanitized_title}_{external_id}/{filename}"
+  "paths.output_template.software": "/downloads/ready/software/{profile_slug}/{sanitized_title}_{external_id}/{filename}"
+  "paths.output_template.paper": "/downloads/ready/paper/{profile_slug}/{sanitized_title}_{external_id}/{filename}"
+  "paths.output_template.game_rom": "/downloads/ready/game_rom/{profile_slug}/{sanitized_title}_{external_id}/{filename}"
+  "paths.output_template.video": "/downloads/ready/video/{profile_slug}/{sanitized_title}_{external_id}/{filename}"

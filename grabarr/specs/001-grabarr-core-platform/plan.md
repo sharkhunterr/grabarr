@@ -117,22 +117,21 @@ constrains it further.
 ```text
 grabarr/
 ├── vendor/
-│   └── shelfmark/                # Direct port of Shelfmark modules (Article III)
+│   └── shelfmark/                # Direct port of Shelfmark v1.2.1 (Article III)
 │       ├── ATTRIBUTION.md        # MIT license + upstream commit SHA
-│       ├── __init__.py
-│       ├── _grabarr_adapter.py   # Bridges Shelfmark's config/logger to Grabarr
-│       ├── bypass/
-│       │   ├── __init__.py
-│       │   ├── external_bypasser.py   # FlareSolverr client (1:1 port)
-│       │   ├── internal_bypasser.py   # SeleniumBase fallback (1:1 port)
-│       │   └── fingerprint.py         # Screen-size randomization (1:1 port)
-│       ├── core/
-│       │   ├── __init__.py
-│       │   ├── mirrors.py             # AA mirror rotation + DNS fallback
-│       │   └── naming.py              # Filename sanitization
-│       └── release_sources/
-│           ├── __init__.py
-│           └── direct_download.py     # AA/LibGen/Z-Lib/Welib/IPFS cascade
+│       ├── __init__.py           # Imports _grabarr_adapter eagerly
+│       ├── _grabarr_adapter.py   # Bridges Shelfmark's config/logger (hand-authored)
+│       ├── bypass/               # 4 files (FlareSolverr, SeleniumBase, fingerprint)
+│       ├── config/               # 8 files (env, settings, migrations, security, ...)
+│       ├── core/                 # 15 files (mirrors, naming, models, utils, queue,
+│       │                           search_plan, cache, request_*, settings_registry,
+│       │                           user_db, auth_modes, image_cache, activity_view_state_service)
+│       ├── download/             # 10 files (network, fs, staging, permissions_debug,
+│       │                           outputs/{booklore,email}, postprocess/pipeline, ...)
+│       ├── metadata_providers/   # 1 file (__init__.py - type registry)
+│       └── release_sources/      # 2 files (__init__.py type registry,
+│                                   direct_download.py AA/LibGen/Z-Lib cascade)
+│  # Total: 41 verbatim files + 1 hand-authored adapter + 1 __init__.py = 43 .py files
 │
 ├── adapters/                     # SourceAdapter wrappers (Article IV)
 │   ├── __init__.py               # Registry + @register_adapter auto-discovery

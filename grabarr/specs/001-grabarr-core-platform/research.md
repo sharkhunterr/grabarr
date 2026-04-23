@@ -23,7 +23,32 @@ its own `shelfmark.core.config` and `shelfmark.core.logger` modules. The shim
 proxies those names onto Grabarr's `core.config` and `core.logging`. Every
 vendored file's `from shelfmark.X` import is rewritten to
 `from grabarr.vendor.shelfmark.X`; the two config/logger imports specifically
-are rewritten to pull from `_grabarr_adapter`.
+are rewritten to pull from `_grabarr_adapter`. Concretely, the `config`
+singleton implements both `.get(key, default)` AND attribute access
+(`config.AA_DONATOR_KEY`, `config.SUPPORTED_FORMATS`, etc.) because
+Shelfmark's code uses both styles. The proxy looks up in (1) Grabarr's
+settings table (injected at startup), (2) environment variables, and
+(3) a built-in defaults table that keeps the cascade functional even
+before Grabarr has finished booting.
+
+**Pinned upstream version**: tag `v1.2.1` (commit
+`019d36b27e3e8576eb4a4d6d76090ee442a05a44`, released 2026-03-21). The
+`main` branch at vendoring time had already migrated to Python 3.14 with
+PEP 758 (`except A, B:` without parens); v1.2.1 is the most recent tag on
+Python 3.10-compatible syntax, so vendoring from it requires zero syntax
+adaptation of upstream code on Grabarr's Python 3.12+ floor.
+
+**Actual vendored tree size**: 41 files (`grabarr/vendor/shelfmark/`,
+excluding the hand-authored `_grabarr_adapter.py` and `__init__.py`).
+This is the full transitive closure of `shelfmark.*` imports reachable
+from the eight spec-named seed files — it includes `core/utils.py`,
+`core/models.py`, `core/queue.py`, `core/search_plan.py`,
+`config/env.py`, `config/settings.py`, `download/network.py`,
+`download/fs.py`, `download/staging.py`, `download/outputs/`, and
+`download/postprocess/` among others. Not all of these are used at
+runtime by the AA/LibGen/Z-Lib cascade, but they must be present so
+that the used files' imports resolve. Pruning them violates the "logic
+untouched" mandate of Constitution §III.
 
 **Rationale**: The constitution bans modifying vendored logic (Article III).
 Shelfmark's code expects a module-global `config` object with a `.get(key,

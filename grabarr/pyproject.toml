@@ -1,0 +1,205 @@
+[project]
+name = "grabarr"
+version = "1.0.0"
+description = "Multi-source media indexer and download bridge exposing shadow libraries (Anna's Archive, LibGen, Z-Library, Internet Archive) as standard Torznab indexers for the *arr ecosystem."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "GPL-3.0-or-later" }
+authors = [
+    { name = "Grabarr contributors" },
+]
+keywords = ["torznab", "arr", "prowlarr", "indexer", "bittorrent", "anna-archive", "libgen", "zlibrary", "internet-archive"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Internet :: WWW/HTTP :: Indexing/Search",
+    "Topic :: System :: Archiving",
+    "Typing :: Typed",
+]
+
+dependencies = [
+    # Web framework + server
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "python-multipart>=0.0.12",
+    # Templating
+    "jinja2>=3.1",
+    # Database
+    "sqlalchemy[asyncio]>=2.0.35",
+    "aiosqlite>=0.20",
+    "alembic>=1.13",
+    # HTTP client
+    "httpx>=0.27",
+    # HTML parsing (same stack as Shelfmark — required for direct vendoring)
+    "beautifulsoup4>=4.12",
+    "lxml>=5.3",
+    # Config
+    "pydantic>=2.9",
+    "pydantic-settings>=2.5",
+    "pyyaml>=6.0",
+    # Scheduling
+    "apscheduler>=3.10",
+    # Caching
+    "async-lru>=2.0",
+    # Notifications
+    "apprise>=1.9",
+    # Metrics
+    "prometheus-client>=0.21",
+    # IDs
+    "uuid-utils>=0.9",
+    # Hashing + encryption
+    "bcrypt>=4.2",
+    "cryptography>=43.0",
+    # File I/O
+    "aiofiles>=24.1",
+]
+
+[project.optional-dependencies]
+# Enables the SeleniumBase-based internal bypasser (Constitution Article VIII).
+# Disabled by default per the clarifications; operators flip bypass.mode to
+# "internal" or "auto" to use it. Chromium/Chrome must be installed separately.
+internal-bypasser = [
+    "seleniumbase>=4.31",
+]
+
+# libtorrent is NOT declared as a pip dependency. It is installed via apt in
+# Docker (see Dockerfile) because no stable PyPI binary wheel exists. For
+# local development, install `python3-libtorrent` from your distro or compile
+# against your Python 3.12 per research.md §R-10.
+
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "respx>=0.22",
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "types-PyYAML>=6.0",
+    "types-aiofiles>=24.1",
+]
+
+[project.scripts]
+grabarr = "grabarr.cli.main:main"
+grabarr-seed-defaults = "grabarr.cli.seed_defaults:main"
+grabarr-vendor-refresh = "grabarr.cli.vendor_refresh:main"
+
+[project.urls]
+Documentation = "https://github.com/grabarr/grabarr"
+Repository = "https://github.com/grabarr/grabarr"
+Issues = "https://github.com/grabarr/grabarr/issues"
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["grabarr"]
+
+# ---------------------------------------------------------------------------
+# Ruff
+# ---------------------------------------------------------------------------
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = [
+    "grabarr/vendor/**",          # Vendored Shelfmark code — do not lint
+    "grabarr/db/migrations/versions/**",  # Alembic-generated
+    "grabarr/web/static/js/**",   # Third-party JS (htmx, sortable, chart.js)
+]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle
+    "F",      # pyflakes
+    "W",      # pycodestyle warnings
+    "I",      # isort
+    "N",      # pep8-naming
+    "UP",     # pyupgrade
+    "B",      # flake8-bugbear
+    "C4",     # comprehensions
+    "SIM",    # simplify
+    "RUF",    # ruff-specific
+    "ASYNC",  # async anti-patterns
+    "S",      # bandit (security)
+    "PL",     # pylint
+]
+ignore = [
+    "PLR0913",  # too many args (FastAPI handlers)
+    "PLR0912",  # too many branches (orchestrator tolerates this)
+    "PLR2004",  # magic-value numbers in tests
+    "S101",     # assert is fine in tests
+    "S104",     # hardcoded-bind-all in FastAPI settings
+    "S324",     # MD5 is used for torrent info hashes — cryptographic context is irrelevant there
+    "N818",     # error suffix (AdapterError vs AdapterException)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S", "PLR"]
+"grabarr/db/migrations/**" = ["I", "N", "UP"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+# ---------------------------------------------------------------------------
+# mypy
+# ---------------------------------------------------------------------------
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_return_any = true
+show_error_codes = true
+pretty = true
+exclude = [
+    "grabarr/vendor/.*",               # Vendored Shelfmark — not our code
+    "grabarr/db/migrations/versions/.*",  # Alembic output
+]
+
+[[tool.mypy.overrides]]
+# Vendored code bypasses strict mode completely.
+module = "grabarr.vendor.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+# Third-party libs without type stubs.
+module = [
+    "apprise",
+    "apprise.*",
+    "apscheduler",
+    "apscheduler.*",
+    "libtorrent",
+    "lxml",
+    "lxml.*",
+    "seleniumbase",
+    "seleniumbase.*",
+]
+ignore_missing_imports = true
+
+# ---------------------------------------------------------------------------
+# pytest
+# ---------------------------------------------------------------------------
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "-ra --strict-markers --strict-config"
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "slow: marks tests as slow (run with `-m slow`)",
+    "vendor_compat: vendored Shelfmark module tests (FR-040)",
+    "requires_browser: tests that launch a real browser (skipped in CI)",
+]
+filterwarnings = [
+    "error",
+    # FastAPI emits a deprecation warning for `on_event` we don't use
+    "ignore::DeprecationWarning:fastapi.*",
+]

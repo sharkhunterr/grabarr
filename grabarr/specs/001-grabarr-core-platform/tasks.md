@@ -27,15 +27,15 @@ Single-project Python layout under the repository root; package is `grabarr/`, t
 
 **Purpose**: Bootstrap the repo, dependency management, build tooling, and directory skeleton so that every later phase has somewhere to land code.
 
-- [ ] T001 Create `pyproject.toml` at repo root declaring the `grabarr` package, Python >= 3.12, and all runtime dependencies listed in `plan.md` §"Technical Context" (FastAPI, SQLAlchemy 2.0, Alembic, libtorrent, httpx, BeautifulSoup4+lxml, pydantic-settings, apscheduler, async-lru, apprise, prometheus-client, Jinja2, cryptography, uuid-utils, bcrypt, aiofiles) plus `[project.optional-dependencies]` groups `dev` (pytest, pytest-asyncio, respx, ruff, mypy) and `internal-bypasser` (seleniumbase).
-- [ ] T002 Run `uv lock` to generate `uv.lock` at repo root (binds versions listed in `pyproject.toml`).
-- [ ] T003 [P] Configure `ruff` and `mypy --strict` in `pyproject.toml` (`[tool.ruff]`, `[tool.ruff.lint]`, `[tool.mypy]` sections with per-package overrides so vendored code is exempt from lint/type checks).
-- [ ] T004 [P] Create `.gitignore` at repo root (standard Python + `/data/`, `/downloads/`, `/config.yaml`, `/grabarr/web/static/css/tailwind.build.css`, `*.session_state`, `.venv/`, `.pytest_cache/`).
-- [ ] T005 [P] Create `config.example.yaml` at repo root with every credential-shaped setting documented inline (AA member key, Z-Lib cookies, bypass.flaresolverr_url, IA contact email).
-- [ ] T006 [P] Create the full directory skeleton matching `plan.md` §"Project Structure" — every `grabarr/**` subdir ships a `__init__.py`, plus `tests/unit/`, `tests/integration/`, `tests/vendor_compat/`, `alembic.ini` placeholder.
-- [ ] T007 [P] Create `grabarr/web/static/css/tailwind.input.css` importing Tailwind's base/components/utilities and declaring component classes used by templates (`btn`, `card`, `badge`, `toast`, etc.).
-- [ ] T008 Create `Makefile` at repo root with targets `dev`, `test`, `lint`, `format`, `tailwind-build`, `tailwind-watch`, `vendor-shelfmark` (downloads the standalone Tailwind binary on first run).
-- [ ] T009 Create `alembic.ini` at repo root pointing at `grabarr/db/migrations/` with `sqlalchemy.url = sqlite+aiosqlite:///data/grabarr.db`.
+- [X] T001 Create `pyproject.toml` at repo root declaring the `grabarr` package, Python >= 3.12, and all runtime dependencies listed in `plan.md` §"Technical Context" (FastAPI, SQLAlchemy 2.0, Alembic, libtorrent, httpx, BeautifulSoup4+lxml, pydantic-settings, apscheduler, async-lru, apprise, prometheus-client, Jinja2, cryptography, uuid-utils, bcrypt, aiofiles) plus `[project.optional-dependencies]` groups `dev` (pytest, pytest-asyncio, respx, ruff, mypy) and `internal-bypasser` (seleniumbase).
+- [X] T002 Run `uv lock` to generate `uv.lock` at repo root (binds versions listed in `pyproject.toml`).
+- [X] T003 [P] Configure `ruff` and `mypy --strict` in `pyproject.toml` (`[tool.ruff]`, `[tool.ruff.lint]`, `[tool.mypy]` sections with per-package overrides so vendored code is exempt from lint/type checks).
+- [X] T004 [P] Create `.gitignore` at repo root (standard Python + `/data/`, `/downloads/`, `/config.yaml`, `/grabarr/web/static/css/tailwind.build.css`, `*.session_state`, `.venv/`, `.pytest_cache/`).
+- [X] T005 [P] Create `config.example.yaml` at repo root with every credential-shaped setting documented inline (AA member key, Z-Lib cookies, bypass.flaresolverr_url, IA contact email).
+- [X] T006 [P] Create the full directory skeleton matching `plan.md` §"Project Structure" — every `grabarr/**` subdir ships a `__init__.py`, plus `tests/unit/`, `tests/integration/`, `tests/vendor_compat/`, `alembic.ini` placeholder.
+- [X] T007 [P] Create `grabarr/web/static/css/tailwind.input.css` importing Tailwind's base/components/utilities and declaring component classes used by templates (`btn`, `card`, `badge`, `toast`, etc.).
+- [X] T008 Create `Makefile` at repo root with targets `dev`, `test`, `lint`, `format`, `tailwind-build`, `tailwind-watch`, `vendor-shelfmark` (downloads the standalone Tailwind binary on first run).
+- [X] T009 Create `alembic.ini` at repo root pointing at `grabarr/db/migrations/` with `sqlalchemy.url = sqlite+aiosqlite:///data/grabarr.db`.
 
 **Checkpoint**: Repo has a working `uv sync`, `make lint`, and an empty but navigable package tree.
 
