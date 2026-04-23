@@ -68,28 +68,93 @@ def _dedup(results: list[SearchResult]) -> list[SearchResult]:
     return out
 
 
+async def _search_one(
+    adapter,
+    entry: SourcePriorityEntry,
+    query: str,
+    media_type: MediaType,
+    filters: SearchFilters,
+    limit: int,
+) -> list[SearchResult]:
+    """Call a single adapter with timeout + graceful failure.
+
+    Returns an empty list on any adapter-side error; the orchestrator
+    treats an empty list as "skip this source" and moves on.
+    """
+    try:
+        results = await asyncio.wait_for(
+            adapter.search(query, media_type, filters, limit),
+            timeout=entry.timeout_seconds,
+        )
+    except TimeoutError:
+        _log.info(
+            "orchestrator: %s timed out after %ds",
+            entry.source_id,
+            entry.timeout_seconds,
+        )
+        return []
+    except AdapterError as exc:
+        _log.info(
+            "orchestrator: %s raised %s: %s",
+            entry.source_id,
+            type(exc).__name__,
+            exc,
+        )
+        return []
+    except Exception as exc:  # noqa: BLE001
+        _log.warning("orchestrator: %s crashed: %s", entry.source_id, exc)
+        return []
+
+    return [
+        SearchResult(
+            external_id=r.external_id,
+            title=r.title,
+            author=r.author,
+            year=r.year,
+            format=r.format,
+            language=r.language,
+            size_bytes=r.size_bytes,
+            quality_score=r.quality_score * entry.weight,
+            source_id=r.source_id,
+            media_type=r.media_type,
+            metadata=r.metadata,
+        )
+        for r in results
+    ]
+
+
 async def orchestrate_search(
     profile: Profile,
     query: str,
     limit: int = 50,
 ) -> list[SearchResult]:
-    """Run a search across ``profile.sources`` respecting its mode."""
+    """Run a search across ``profile.sources`` respecting its mode.
+
+    ``first_match``: iterate sources in order, stop on the first source
+    that returns any results (the fast path for "just give me something").
+
+    ``aggregate_all``: run every enabled source in parallel (bounded by
+    the per-adapter rate-limit buckets), concatenate, dedupe, sort.
+    """
     if not profile.enabled:
         return []
 
     media_type = MediaType(profile.media_type)
     filters = _filters_from_profile(profile)
     sources = _sources_from_profile(profile)
-
     mode = profile.mode
-    all_results: list[SearchResult] = []
 
+    # Filter to adapters that are registered + compatible + authorised.
+    eligible: list[tuple[object, SourcePriorityEntry]] = []
     for entry in sources:
         if not entry.enabled:
             continue
         adapter = get_adapter_instance(entry.source_id)
         if adapter is None:
-            _log.debug("orchestrator: adapter %s not registered — skipping", entry.source_id)
+            _log.debug(
+                "orchestrator: adapter %s not registered — skipping",
+                entry.source_id,
+            )
             continue
         if media_type not in adapter.supported_media_types:
             continue
@@ -99,44 +164,29 @@ async def orchestrate_search(
             and not getattr(adapter, "_member_key", None)
         ):
             continue
+        eligible.append((adapter, entry))
 
-        try:
-            results = await asyncio.wait_for(
-                adapter.search(query, media_type, filters, limit),
-                timeout=entry.timeout_seconds,
-            )
-        except TimeoutError:
-            _log.info("orchestrator: %s timed out after %ds", entry.source_id, entry.timeout_seconds)
-            continue
-        except AdapterError as exc:
-            _log.info("orchestrator: %s raised %s: %s", entry.source_id, type(exc).__name__, exc)
-            continue
-        except Exception as exc:
-            _log.warning("orchestrator: %s crashed: %s", entry.source_id, exc)
-            continue
+    all_results: list[SearchResult] = []
 
-        # Apply per-entry weight multiplier.
-        weighted = [
-            SearchResult(
-                external_id=r.external_id,
-                title=r.title,
-                author=r.author,
-                year=r.year,
-                format=r.format,
-                language=r.language,
-                size_bytes=r.size_bytes,
-                quality_score=r.quality_score * entry.weight,
-                source_id=r.source_id,
-                media_type=r.media_type,
-                metadata=r.metadata,
+    if mode == ProfileMode.AGGREGATE_ALL.value:
+        # Run every eligible source in parallel.
+        tasks = [
+            asyncio.create_task(
+                _search_one(adapter, entry, query, media_type, filters, limit)
             )
-            for r in results
+            for adapter, entry in eligible
         ]
-
-        all_results.extend(weighted)
-
-        if mode == ProfileMode.FIRST_MATCH.value and weighted:
-            break
+        for coro in asyncio.as_completed(tasks):
+            all_results.extend(await coro)
+    else:
+        # first_match: sequential, stop on first non-empty.
+        for adapter, entry in eligible:
+            weighted = await _search_one(
+                adapter, entry, query, media_type, filters, limit
+            )
+            all_results.extend(weighted)
+            if weighted:
+                break
 
     all_results = _dedup(all_results)
     all_results.sort(key=lambda r: r.quality_score, reverse=True)

@@ -16,16 +16,23 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Body, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
 from grabarr.core.logging import setup_logger
 from grabarr.profiles.models import Profile
+from grabarr.profiles.orchestrator import test_profile as run_test_profile
 from grabarr.profiles.service import (
+    ProfileDefaultProtected,
     ProfileNotFound,
+    ProfileSlugConflict,
+    create_profile,
+    delete_profile,
+    duplicate_profile,
     get_profile_by_slug,
     list_profiles,
     regenerate_api_key,
+    update_profile,
 )
 
 router = APIRouter(prefix="/api", tags=["admin"])
@@ -87,6 +94,94 @@ async def api_regenerate_key(slug: str) -> dict:
     except ProfileNotFound:
         raise HTTPException(status_code=404, detail=f"profile '{slug}' not found") from None
     return {"api_key": plaintext}
+
+
+@router.post("/profiles")
+async def api_create_profile(
+    request: Request,
+    body: dict[str, Any] = Body(...),
+) -> JSONResponse:
+    """Create a non-default profile. Returns the new row + one-time API key."""
+    for required in ("slug", "name", "media_type"):
+        if required not in body:
+            raise HTTPException(status_code=400, detail=f"missing field: {required}")
+    try:
+        profile, plaintext = await create_profile(body)
+    except ProfileSlugConflict:
+        raise HTTPException(
+            status_code=409, detail=f"profile slug '{body['slug']}' already exists"
+        ) from None
+    base_url = f"{request.url.scheme}://{request.url.netloc}"
+    data = _profile_to_dict(profile, base_url)
+    data["api_key"] = plaintext
+    return JSONResponse(content=data, status_code=201)
+
+
+@router.patch("/profiles/{slug}")
+async def api_update_profile(
+    slug: str,
+    request: Request,
+    body: dict[str, Any] = Body(...),
+) -> dict:
+    try:
+        profile = await update_profile(slug, body)
+    except ProfileNotFound:
+        raise HTTPException(status_code=404, detail=f"profile '{slug}' not found") from None
+    base_url = f"{request.url.scheme}://{request.url.netloc}"
+    return _profile_to_dict(profile, base_url)
+
+
+@router.delete("/profiles/{slug}", status_code=204)
+async def api_delete_profile(slug: str) -> None:
+    try:
+        await delete_profile(slug)
+    except ProfileNotFound:
+        raise HTTPException(status_code=404, detail=f"profile '{slug}' not found") from None
+    except ProfileDefaultProtected:
+        raise HTTPException(
+            status_code=403,
+            detail=f"profile '{slug}' is a default and cannot be deleted (disable instead)",
+        ) from None
+
+
+@router.post("/profiles/{slug}/duplicate")
+async def api_duplicate_profile(
+    slug: str,
+    request: Request,
+    body: dict[str, Any] = Body(...),
+) -> JSONResponse:
+    new_slug = body.get("new_slug")
+    if not new_slug:
+        raise HTTPException(status_code=400, detail="missing field: new_slug")
+    try:
+        profile, plaintext = await duplicate_profile(slug, new_slug)
+    except ProfileNotFound:
+        raise HTTPException(status_code=404, detail=f"profile '{slug}' not found") from None
+    except ProfileSlugConflict:
+        raise HTTPException(
+            status_code=409, detail=f"profile slug '{new_slug}' already exists"
+        ) from None
+    base_url = f"{request.url.scheme}://{request.url.netloc}"
+    data = _profile_to_dict(profile, base_url)
+    data["api_key"] = plaintext
+    return JSONResponse(content=data, status_code=201)
+
+
+@router.post("/profiles/{slug}/test")
+async def api_test_profile(
+    slug: str,
+    body: dict[str, Any] = Body(default={}),
+) -> dict:
+    """Run an inline test search against the profile."""
+    query = body.get("query", "").strip()
+    limit = int(body.get("limit", 10))
+    if not query:
+        raise HTTPException(status_code=400, detail="query is required")
+    try:
+        profile = await get_profile_by_slug(slug)
+    except ProfileNotFound:
+        raise HTTPException(status_code=404, detail=f"profile '{slug}' not found") from None
+    return await run_test_profile(profile, query, limit=limit)
 
 
 @router.get("/prowlarr-config")

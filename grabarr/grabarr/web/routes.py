@@ -67,3 +67,63 @@ async def profiles_list(request: Request) -> HTMLResponse:
             "base_url": base_url,
         },
     )
+
+
+@router.get("/profiles/new", response_class=HTMLResponse)
+async def profile_new(request: Request) -> HTMLResponse:
+    """Empty profile-edit form for creating a new profile."""
+    from grabarr.core.enums import MediaType
+
+    # Build a placeholder object that behaves like a Profile for the template.
+    blank = type(
+        "_BlankProfile",
+        (),
+        {
+            "slug": "",
+            "name": "",
+            "description": "",
+            "media_type": MediaType.EBOOK.value,
+            "mode": "first_match",
+            "newznab_categories": [7020],
+            "sources": [],
+            "filters": {"languages": [], "preferred_formats": []},
+            "download_mode_override": None,
+            "torrent_mode_override": None,
+            "enabled": True,
+            "is_default": False,
+        },
+    )()
+    return templates.TemplateResponse(
+        request,
+        "profiles/edit.html",
+        {
+            "profile": blank,
+            "is_new": True,
+            "adapters": get_registered_adapters(),
+            "media_types": [m.value for m in MediaType],
+        },
+    )
+
+
+@router.get("/profiles/{slug}/edit", response_class=HTMLResponse)
+async def profile_edit(slug: str, request: Request) -> HTMLResponse:
+    """Edit form for an existing profile."""
+    from grabarr.core.enums import MediaType
+    from grabarr.profiles.service import ProfileNotFound, get_profile_by_slug
+
+    try:
+        profile = await get_profile_by_slug(slug)
+    except ProfileNotFound:
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=404, detail=f"profile '{slug}' not found") from None
+    return templates.TemplateResponse(
+        request,
+        "profiles/edit.html",
+        {
+            "profile": profile,
+            "is_new": False,
+            "adapters": get_registered_adapters(),
+            "media_types": [m.value for m in MediaType],
+        },
+    )

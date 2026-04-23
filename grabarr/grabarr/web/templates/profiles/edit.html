@@ -1,0 +1,271 @@
+{% extends "_base.html" %}
+{% block title %}Edit {{ profile.name }} · Grabarr{% endblock %}
+
+{% block content %}
+<script src="https://unpkg.com/htmx.org@2.0.3/dist/htmx.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js" defer></script>
+
+<div class="mb-4">
+  <a href="/profiles" class="text-sm text-indigo-600 hover:underline dark:text-indigo-400">&larr; Back to profiles</a>
+</div>
+
+<div class="flex items-center justify-between mb-6">
+  <div>
+    <h1 class="text-2xl font-bold">{{ "New profile" if is_new else "Edit " + profile.name }}</h1>
+    <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+      Changes apply immediately — no restart required.
+    </p>
+  </div>
+  {% if not is_new and not profile.is_default %}
+  <button class="btn-danger"
+          onclick="if (confirm('Delete this profile? This cannot be undone.')) {
+            fetch('/api/profiles/{{ profile.slug }}', {method:'DELETE'}).then(() => window.location.href='/profiles');
+          }">Delete</button>
+  {% endif %}
+</div>
+
+<form id="profile-form" class="space-y-6" onsubmit="return saveProfile(event)">
+  <div class="card grid gap-4 md:grid-cols-2">
+    <div>
+      <label class="label" for="p-slug">Slug (URL-safe, immutable)</label>
+      <input id="p-slug" name="slug" class="input font-mono"
+             value="{{ profile.slug }}" {% if not is_new %}readonly disabled{% endif %}
+             pattern="[a-z0-9][a-z0-9_-]{1,63}" required>
+    </div>
+    <div>
+      <label class="label" for="p-name">Name</label>
+      <input id="p-name" name="name" class="input" value="{{ profile.name }}" required>
+    </div>
+    <div class="md:col-span-2">
+      <label class="label" for="p-description">Description</label>
+      <input id="p-description" name="description" class="input"
+             value="{{ profile.description or '' }}">
+    </div>
+    <div>
+      <label class="label" for="p-media_type">Media type</label>
+      <select id="p-media_type" name="media_type" class="input">
+        {% for mt in media_types %}
+          <option value="{{ mt }}" {% if profile.media_type == mt %}selected{% endif %}>{{ mt }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="label" for="p-mode">Orchestrator mode</label>
+      <select id="p-mode" name="mode" class="input">
+        <option value="first_match" {% if profile.mode == 'first_match' %}selected{% endif %}>first_match</option>
+        <option value="aggregate_all" {% if profile.mode == 'aggregate_all' %}selected{% endif %}>aggregate_all</option>
+      </select>
+    </div>
+    <div>
+      <label class="label" for="p-download_mode">Download mode override</label>
+      <select id="p-download_mode" name="download_mode_override" class="input">
+        <option value="">(use global default)</option>
+        <option value="sync" {% if profile.download_mode_override == 'sync' %}selected{% endif %}>sync</option>
+        <option value="async_streaming" {% if profile.download_mode_override == 'async_streaming' %}selected{% endif %}>async_streaming</option>
+        <option value="hybrid" {% if profile.download_mode_override == 'hybrid' %}selected{% endif %}>hybrid</option>
+      </select>
+    </div>
+    <div>
+      <label class="label" for="p-torrent_mode">Torrent mode override</label>
+      <select id="p-torrent_mode" name="torrent_mode_override" class="input">
+        <option value="">(use global default)</option>
+        <option value="active_seed" {% if profile.torrent_mode_override == 'active_seed' %}selected{% endif %}>active_seed</option>
+        <option value="webseed" {% if profile.torrent_mode_override == 'webseed' %}selected{% endif %}>webseed</option>
+      </select>
+    </div>
+    <div class="md:col-span-2">
+      <label class="label" for="p-categories">Newznab categories (comma-separated ints)</label>
+      <input id="p-categories" name="newznab_categories" class="input font-mono"
+             value="{{ profile.newznab_categories|join(',') }}">
+    </div>
+    <div class="md:col-span-2">
+      <label class="inline-flex items-center gap-2 cursor-pointer select-none">
+        <input type="checkbox" name="enabled" class="h-4 w-4"
+               {% if profile.enabled %}checked{% endif %}>
+        <span class="text-sm">Enabled</span>
+      </label>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 class="text-lg font-semibold mb-3">Sources (drag to reorder)</h2>
+    <ul id="source-list" class="space-y-2">
+      {% for entry in profile.sources %}
+        <li class="flex items-center gap-3 rounded border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900 cursor-move">
+          <span class="text-gray-400">≡</span>
+          <input type="hidden" name="source_id" value="{{ entry.source_id }}">
+          <span class="flex-1 font-medium">{{ entry.source_id }}</span>
+          <label class="text-xs text-gray-500 dark:text-gray-400">weight
+            <input type="number" step="0.1" min="0.1" max="2.0" name="weight"
+                   value="{{ entry.weight }}" class="ml-1 w-20 rounded border-gray-300 px-1 py-0.5 text-xs dark:border-gray-700 dark:bg-gray-800">
+          </label>
+          <label class="text-xs text-gray-500 dark:text-gray-400">timeout
+            <input type="number" min="1" max="600" name="timeout_seconds"
+                   value="{{ entry.timeout_seconds }}" class="ml-1 w-20 rounded border-gray-300 px-1 py-0.5 text-xs dark:border-gray-700 dark:bg-gray-800">
+          </label>
+          <label class="inline-flex items-center gap-1 text-xs cursor-pointer">
+            <input type="checkbox" name="enabled" {% if entry.enabled %}checked{% endif %}>
+            <span class="text-gray-500 dark:text-gray-400">enabled</span>
+          </label>
+          <button type="button" class="text-xs text-red-600 hover:underline"
+                  onclick="this.parentElement.remove()">remove</button>
+        </li>
+      {% endfor %}
+    </ul>
+    <div class="mt-3 flex gap-2">
+      <select id="add-source-id" class="input w-auto">
+        {% for aid, cls in adapters.items() | sort %}
+          <option value="{{ aid }}">{{ cls.display_name }} ({{ aid }})</option>
+        {% endfor %}
+      </select>
+      <button type="button" class="btn-secondary" onclick="addSource()">Add source</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 class="text-lg font-semibold mb-3">Filters</h2>
+    <div class="grid gap-3 md:grid-cols-2">
+      <div>
+        <label class="label">Languages (ISO-639-1, comma-separated)</label>
+        <input name="languages" class="input" value="{{ profile.filters.get('languages', []) | join(',') }}" placeholder="en,fr,de">
+      </div>
+      <div>
+        <label class="label">Preferred formats</label>
+        <input name="preferred_formats" class="input" value="{{ profile.filters.get('preferred_formats', []) | join(',') }}" placeholder="epub,mobi,pdf">
+      </div>
+      <div>
+        <label class="label">Min year</label>
+        <input type="number" name="min_year" class="input" value="{{ profile.filters.get('min_year') or '' }}">
+      </div>
+      <div>
+        <label class="label">Max year</label>
+        <input type="number" name="max_year" class="input" value="{{ profile.filters.get('max_year') or '' }}">
+      </div>
+      <div class="md:col-span-2">
+        <label class="label">Extra query terms</label>
+        <input name="extra_query_terms" class="input" value="{{ profile.filters.get('extra_query_terms') or '' }}">
+      </div>
+    </div>
+  </div>
+
+  <div class="flex gap-3">
+    <button type="submit" class="btn-primary">Save</button>
+    {% if not is_new %}
+    <button type="button" class="btn-secondary"
+            hx-post="/api/profiles/{{ profile.slug }}/test"
+            hx-ext="json-enc"
+            hx-vals='js:{query: document.getElementById("test-query").value, limit: 10}'
+            hx-target="#test-results"
+            hx-swap="innerHTML">
+      Run Test
+    </button>
+    <input id="test-query" type="search" class="input max-w-sm"
+           placeholder="search query (e.g. foundation)">
+    {% endif %}
+    <a href="/profiles" class="btn-ghost">Cancel</a>
+  </div>
+</form>
+
+<div id="test-results" class="mt-6"></div>
+
+{% raw %}
+<script>
+  // Drag-and-drop reorder for sources.
+  document.addEventListener('DOMContentLoaded', () => {
+    const list = document.getElementById('source-list');
+    if (list && window.Sortable) {
+      new Sortable(list, { handle: 'span', animation: 150 });
+    }
+  });
+
+  function addSource() {
+    const sel = document.getElementById('add-source-id');
+    const src = sel.value;
+    const li = document.createElement('li');
+    li.className = 'flex items-center gap-3 rounded border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900 cursor-move';
+    li.innerHTML = `
+      <span class="text-gray-400">≡</span>
+      <input type="hidden" name="source_id" value="${src}">
+      <span class="flex-1 font-medium">${src}</span>
+      <label class="text-xs text-gray-500 dark:text-gray-400">weight
+        <input type="number" step="0.1" min="0.1" max="2.0" name="weight" value="1.0" class="ml-1 w-20 rounded border-gray-300 px-1 py-0.5 text-xs dark:border-gray-700 dark:bg-gray-800">
+      </label>
+      <label class="text-xs text-gray-500 dark:text-gray-400">timeout
+        <input type="number" min="1" max="600" name="timeout_seconds" value="60" class="ml-1 w-20 rounded border-gray-300 px-1 py-0.5 text-xs dark:border-gray-700 dark:bg-gray-800">
+      </label>
+      <label class="inline-flex items-center gap-1 text-xs cursor-pointer">
+        <input type="checkbox" name="enabled" checked>
+        <span class="text-gray-500 dark:text-gray-400">enabled</span>
+      </label>
+      <button type="button" class="text-xs text-red-600 hover:underline" onclick="this.parentElement.remove()">remove</button>
+    `;
+    document.getElementById('source-list').appendChild(li);
+  }
+
+  function collectSources() {
+    const rows = document.querySelectorAll('#source-list > li');
+    return Array.from(rows).map(li => ({
+      source_id: li.querySelector('input[name=source_id]').value,
+      weight: parseFloat(li.querySelector('input[name=weight]').value),
+      timeout_seconds: parseInt(li.querySelector('input[name=timeout_seconds]').value),
+      enabled: li.querySelector('input[name=enabled]').checked,
+      skip_if_member_required: false,
+    }));
+  }
+
+  async function saveProfile(e) {
+    e.preventDefault();
+    const form = document.getElementById('profile-form');
+    const fd = new FormData(form);
+    const cats = (fd.get('newznab_categories') || '').split(',').map(s => s.trim()).filter(Boolean).map(Number);
+    const langs = (fd.get('languages') || '').split(',').map(s => s.trim()).filter(Boolean);
+    const formats = (fd.get('preferred_formats') || '').split(',').map(s => s.trim()).filter(Boolean);
+
+    const body = {
+      name: fd.get('name'),
+      description: fd.get('description') || null,
+      media_type: fd.get('media_type'),
+      mode: fd.get('mode'),
+      newznab_categories: cats,
+      download_mode_override: fd.get('download_mode_override') || null,
+      torrent_mode_override: fd.get('torrent_mode_override') || null,
+      enabled: fd.get('enabled') === 'on',
+      sources: collectSources(),
+      filters: {
+        languages: langs,
+        preferred_formats: formats,
+        min_year: fd.get('min_year') ? parseInt(fd.get('min_year')) : null,
+        max_year: fd.get('max_year') ? parseInt(fd.get('max_year')) : null,
+        min_size_mb: null,
+        max_size_mb: null,
+        require_isbn: false,
+        extra_query_terms: fd.get('extra_query_terms') || '',
+      }
+    };
+
+    const isNew = {{ 'true' if is_new else 'false' }};
+    let url, method;
+    if (isNew) {
+      body.slug = fd.get('slug');
+      url = '/api/profiles';
+      method = 'POST';
+    } else {
+      url = '/api/profiles/{{ profile.slug }}';
+      method = 'PATCH';
+    }
+
+    const r = await fetch(url, {
+      method, headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) {
+      const msg = await r.text();
+      alert('Save failed: ' + msg);
+      return false;
+    }
+    window.location.href = '/profiles';
+    return false;
+  }
+</script>
+{% endraw %}
+{% endblock %}

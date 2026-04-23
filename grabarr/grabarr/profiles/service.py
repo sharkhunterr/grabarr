@@ -115,6 +115,76 @@ async def delete_profile(slug: str) -> None:
         await session.delete(obj)
 
 
+async def update_profile(slug: str, patch: dict[str, Any]) -> Profile:
+    """Apply a partial update. Returns the updated row.
+
+    ``patch`` may contain any subset of: name, description, sources,
+    filters, mode, newznab_categories, download_mode_override,
+    torrent_mode_override, enabled. ``slug`` cannot be changed via
+    PATCH — rename via duplicate+delete instead.
+    """
+    import datetime as dt
+
+    mutable = {
+        "name",
+        "description",
+        "sources",
+        "filters",
+        "mode",
+        "newznab_categories",
+        "download_mode_override",
+        "torrent_mode_override",
+        "enabled",
+    }
+    async with session_scope() as session:
+        row = await session.execute(select(Profile).where(Profile.slug == slug))
+        obj = row.scalar_one_or_none()
+        if obj is None:
+            raise ProfileNotFound(slug)
+        for key, value in patch.items():
+            if key not in mutable:
+                continue
+            setattr(obj, key, value)
+        obj.updated_at = dt.datetime.now(dt.UTC)
+        return obj
+
+
+async def duplicate_profile(slug: str, new_slug: str) -> tuple[Profile, str]:
+    """Clone a profile under ``new_slug`` with a fresh API key.
+
+    The copy is never marked ``is_default=True`` — even if the source
+    was a default, the duplicate is user-owned and deletable.
+    """
+    plaintext = secrets.token_urlsafe(32)
+    digest = bcrypt.hashpw(plaintext.encode(), bcrypt.gensalt(rounds=10)).decode()
+    async with session_scope() as session:
+        row = await session.execute(select(Profile).where(Profile.slug == slug))
+        src = row.scalar_one_or_none()
+        if src is None:
+            raise ProfileNotFound(slug)
+        copy = Profile(
+            slug=new_slug,
+            name=f"{src.name} (copy)",
+            description=src.description,
+            media_type=src.media_type,
+            sources=list(src.sources or []),
+            filters=dict(src.filters or {}),
+            mode=src.mode,
+            newznab_categories=list(src.newznab_categories or []),
+            download_mode_override=src.download_mode_override,
+            torrent_mode_override=src.torrent_mode_override,
+            enabled=True,
+            api_key_hash=digest,
+            is_default=False,
+        )
+        session.add(copy)
+        try:
+            await session.flush()
+        except IntegrityError as exc:
+            raise ProfileSlugConflict(new_slug) from exc
+        return copy, plaintext
+
+
 # ---- Adapter instantiation per profile -----------------------------------
 
 # Process-wide adapter cache. Instances are keyed by source_id so we

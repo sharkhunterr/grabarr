@@ -9,6 +9,7 @@
       Each profile is its own Torznab endpoint. Copy the config JSON into Prowlarr's Generic Torznab indexer.
     </p>
   </div>
+  <a href="/profiles/new" class="btn-primary">+ New profile</a>
 </div>
 
 <div class="grid gap-4 md:grid-cols-2">
@@ -50,14 +51,18 @@
       <code class="mt-1 block overflow-x-auto rounded bg-gray-100 px-2 py-1 font-mono text-xs dark:bg-gray-800">{{ base_url }}/torznab/{{ p.slug }}/api</code>
     </div>
 
-    <div class="mt-auto flex gap-2 pt-4">
+    <div class="mt-auto flex flex-wrap gap-2 pt-4">
       <a href="/api/prowlarr-config?profile={{ p.slug }}"
          class="btn-primary flex-1"
          download="grabarr-{{ p.slug }}.json">
         Copy Prowlarr Config
       </a>
+      <a href="/profiles/{{ p.slug }}/edit" class="btn-secondary">Edit</a>
       <button type="button"
               class="btn-secondary"
+              onclick="dupe('{{ p.slug }}')">Duplicate</button>
+      <button type="button"
+              class="btn-ghost"
               data-url="{{ base_url }}/torznab/{{ p.slug }}/api"
               onclick="navigator.clipboard.writeText(this.dataset.url);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy URL',1500)">
         Copy URL
@@ -66,4 +71,20 @@
   </div>
   {% endfor %}
 </div>
+
+{% raw %}
+<script>
+  async function dupe(slug) {
+    const newSlug = prompt('New slug for the copy (lowercase letters, digits, _ or -):', slug + '_copy');
+    if (!newSlug) return;
+    const r = await fetch(`/api/profiles/${slug}/duplicate`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({new_slug: newSlug}),
+    });
+    if (!r.ok) { alert('Duplicate failed: ' + await r.text()); return; }
+    window.location.href = `/profiles/${newSlug}/edit`;
+  }
+</script>
+{% endraw %}
 {% endblock %}

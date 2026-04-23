@@ -222,16 +222,16 @@ Single-project Python layout under the repository root; package is `grabarr/`, t
 
 **Independent Test**: Per `quickstart.md` §"AC demo 3" — duplicate `ebooks_general`, drag IA to the top, add `languages=["fr"]`, save, copy URL to Prowlarr, confirm indexer appears and returns filtered results.
 
-- [ ] T103 [P] [US3] Extend `grabarr/profiles/orchestrator.py` — `aggregate_all` mode: run every enabled source in parallel (bounded by a shared semaphore from rate_limit), concatenate results, dedup, sort by weight-adjusted `quality_score`, cap at 100.
-- [ ] T104 [P] [US3] Extend `grabarr/profiles/service.py` `duplicate(slug, new_slug)` method — clones source entries, filters, overrides; mints a new API key; flips `is_default` to false.
-- [ ] T105 [US3] Extend `grabarr/api/admin.py` — `POST /api/profiles/{slug}/test` running a real test search with full source breakdown (per `contracts/admin-api.md`).
-- [ ] T106 [US3] Extend `grabarr/api/admin.py` — `POST /api/profiles/{slug}/duplicate`.
-- [ ] T107 [US3] Create `grabarr/web/templates/profiles/edit.html` — full edit form with drag-and-drop source ordering (Sortable.js), weight sliders, filters chips (language + format multiselect, year/size min/max), mode radio, per-profile mode overrides, HTMX-submitted save button.
-- [ ] T108 [US3] Create `grabarr/web/templates/profiles/new.html` — new-profile form reusing the edit template's components.
-- [ ] T109 [US3] Create `grabarr/web/templates/partials/profile_test_results.html` — HTMX fragment rendered inline after `POST /api/profiles/{slug}/test`.
-- [ ] T110 [US3] Extend `grabarr/web/routes.py` — `GET /profiles/new`, `GET /profiles/{slug}/edit`.
-- [ ] T111 [US3] Extend `grabarr/web/templates/profiles/list.html` — add "Duplicate" and "Edit" actions per card.
-- [ ] T112 [US3] Create `tests/integration/test_us3_custom_profile.py` — POST a new profile, assert its Torznab endpoint is immediately live (no restart), assert filters apply end-to-end in a mocked search, assert an `aggregate_all` profile returns concatenated dedup'd results.
+- [X] T103 [P] [US3] Extend `grabarr/profiles/orchestrator.py` — `aggregate_all` mode: run every enabled source in parallel (bounded by a shared semaphore from rate_limit), concatenate results, dedup, sort by weight-adjusted `quality_score`, cap at 100.
+- [X] T104 [P] [US3] Extend `grabarr/profiles/service.py` `duplicate(slug, new_slug)` method — clones source entries, filters, overrides; mints a new API key; flips `is_default` to false.
+- [X] T105 [US3] Extend `grabarr/api/admin.py` — `POST /api/profiles/{slug}/test` running a real test search with full source breakdown (per `contracts/admin-api.md`).
+- [X] T106 [US3] Extend `grabarr/api/admin.py` — `POST /api/profiles/{slug}/duplicate`.
+- [X] T107 [US3] Create `grabarr/web/templates/profiles/edit.html` — full edit form with drag-and-drop source ordering (Sortable.js), weight sliders, filters chips (language + format multiselect, year/size min/max), mode radio, per-profile mode overrides, HTMX-submitted save button.
+- [X] T108 [US3] Create `grabarr/web/templates/profiles/new.html` — new-profile form reusing the edit template's components.
+- [X] T109 [US3] Create `grabarr/web/templates/partials/profile_test_results.html` — HTMX fragment rendered inline after `POST /api/profiles/{slug}/test`.
+- [X] T110 [US3] Extend `grabarr/web/routes.py` — `GET /profiles/new`, `GET /profiles/{slug}/edit`.
+- [X] T111 [US3] Extend `grabarr/web/templates/profiles/list.html` — add "Duplicate" and "Edit" actions per card.
+- [X] T112 [US3] Create `tests/integration/test_us3_custom_profile.py` — POST a new profile, assert its Torznab endpoint is immediately live (no restart), assert filters apply end-to-end in a mocked search, assert an `aggregate_all` profile returns concatenated dedup'd results.
 
 **Checkpoint**: UI-driven profile customization works. Power users are unblocked.
 
