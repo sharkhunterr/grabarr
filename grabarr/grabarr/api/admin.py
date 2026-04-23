@@ -651,6 +651,130 @@ async def api_prowlarr_config(
     )
 
 
+# ---- Bypass (FlareSolverr) ---------------------------------------------
+
+
+@router.post("/bypass/test")
+async def api_bypass_test(body: dict[str, Any] = Body(default_factory=dict)) -> dict:
+    """Probe FlareSolverr.
+
+    Request body (all optional):
+      - ``url``: host[:port] of FlareSolverr. Falls back to
+        ``GRABARR_SHELFMARK_EXT_BYPASSER_URL`` env, then the
+        ``bypass.flaresolverr_url`` setting, then the Shelfmark default.
+      - ``target``: page to fetch through the bypasser (default:
+        ``https://annas-archive.gl/``).
+
+    Returns ``{status, endpoint, probe_target, elapsed_ms,
+    flaresolverr_version?, message?}``. ``status`` is ``"ok"`` when the
+    round-trip succeeds and FlareSolverr returns a non-empty HTML body.
+    """
+    import os
+    import time
+
+    import httpx
+
+    # 1. Pick endpoint.
+    raw = (body.get("url") or "").strip() or None
+    if not raw:
+        raw = os.environ.get("GRABARR_SHELFMARK_EXT_BYPASSER_URL") or None
+    if not raw:
+        # Fall back to the bypass.flaresolverr_url setting via admin API shape.
+        from grabarr.core.settings_model import Setting
+        from grabarr.db.session import session_scope
+        from sqlalchemy import select
+
+        async with session_scope() as session:
+            row = await session.execute(
+                select(Setting.value).where(Setting.key == "bypass.flaresolverr_url")
+            )
+            raw = row.scalar_one_or_none()
+    if not raw:
+        raw = "http://flaresolverr:8191"
+
+    # Accept host[:port] with or without trailing /v1.
+    endpoint = raw.rstrip("/")
+    if endpoint.endswith("/v1"):
+        v1 = endpoint
+    else:
+        v1 = f"{endpoint}/v1"
+
+    target = body.get("target") or "https://annas-archive.gl/"
+
+    # 2. POST request.get to FlareSolverr with a 30s timeout.
+    payload = {"cmd": "request.get", "url": target, "maxTimeout": 25000}
+    t0 = time.monotonic()
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            r = await client.post(
+                v1,
+                json=payload,
+                headers={"Content-Type": "application/json"},
+            )
+    except httpx.ConnectError as exc:
+        return {
+            "status": "unreachable",
+            "endpoint": v1,
+            "probe_target": target,
+            "elapsed_ms": int((time.monotonic() - t0) * 1000),
+            "message": f"Could not connect: {exc}",
+        }
+    except httpx.TimeoutException:
+        return {
+            "status": "timeout",
+            "endpoint": v1,
+            "probe_target": target,
+            "elapsed_ms": int((time.monotonic() - t0) * 1000),
+            "message": "No response within 30 s — is FlareSolverr running?",
+        }
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "status": "error",
+            "endpoint": v1,
+            "probe_target": target,
+            "elapsed_ms": int((time.monotonic() - t0) * 1000),
+            "message": str(exc),
+        }
+    elapsed_ms = int((time.monotonic() - t0) * 1000)
+
+    # 3. Parse the FlareSolverr response envelope.
+    try:
+        data = r.json()
+    except Exception:  # noqa: BLE001
+        return {
+            "status": "bad_response",
+            "endpoint": v1,
+            "probe_target": target,
+            "elapsed_ms": elapsed_ms,
+            "message": f"HTTP {r.status_code}; body was not JSON ({r.text[:200]})",
+        }
+
+    fs_status = data.get("status")
+    version = data.get("version")
+    if fs_status != "ok":
+        return {
+            "status": "failed",
+            "endpoint": v1,
+            "probe_target": target,
+            "elapsed_ms": elapsed_ms,
+            "flaresolverr_version": version,
+            "message": data.get("message") or f"FlareSolverr status={fs_status}",
+        }
+    solution = data.get("solution") or {}
+    html = solution.get("response") or ""
+    return {
+        "status": "ok",
+        "endpoint": v1,
+        "probe_target": target,
+        "elapsed_ms": elapsed_ms,
+        "flaresolverr_version": version,
+        "message": (
+            f"solved in {solution.get('status', '?')} — "
+            f"{len(html)} bytes of HTML returned"
+        ),
+    }
+
+
 # ---- Logs --------------------------------------------------------------
 
 

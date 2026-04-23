@@ -2,177 +2,208 @@
 {% block title %}Settings · Grabarr{% endblock %}
 
 {% block content %}
-<h1 class="text-2xl font-bold mb-6">Settings</h1>
-<p class="mb-6 text-sm text-gray-600 dark:text-gray-400">
-  UI-mutable runtime settings. Credentials (AA member key, Z-Library cookies)
-  live in <code>config.yaml</code> or <code>GRABARR_*</code> env vars and are
-  not editable here.
-</p>
+<div class="flex flex-wrap items-start justify-between gap-4 mb-6">
+  <div>
+    <h1 class="page-title">Settings</h1>
+    <p class="page-subtitle">
+      UI-mutable runtime settings. Credentials (AA member key, Z-Library
+      cookies) live in <code>config.yaml</code> or <code>GRABARR_*</code> env
+      vars and are not editable here.
+    </p>
+  </div>
+</div>
 
 <form id="settings-form" class="space-y-6" onsubmit="return saveSettings(event)">
 
 <div class="card">
-  <h2 class="text-lg font-semibold mb-3">Downloads</h2>
-  <div class="grid gap-3 md:grid-cols-2">
-    <label class="block">
-      <span class="label">Default mode</span>
-      <select name="download.mode" class="input">
-        {% for m in ['sync', 'async_streaming', 'hybrid'] %}
-          <option value="{{ m }}" {% if settings['download.mode'] == m %}selected{% endif %}>{{ m }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label class="block">
-      <span class="label">Hybrid threshold (MB)</span>
-      <input type="number" name="download.hybrid_threshold_mb" class="input"
-             value="{{ settings['download.hybrid_threshold_mb'] }}" min="1">
-    </label>
-    <label class="block">
-      <span class="label">Per-download timeout (s)</span>
-      <input type="number" name="download.timeout_seconds" class="input"
-             value="{{ settings['download.timeout_seconds'] }}" min="10">
-    </label>
-    <label class="block">
-      <span class="label">Max file size (GB)</span>
-      <input type="number" step="0.1" name="download.max_size_gb" class="input"
-             value="{{ settings['download.max_size_gb'] }}" min="0.1">
-    </label>
+  <div class="card-body space-y-4">
+    <h2 class="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Downloads</h2>
+    <div class="grid gap-4 md:grid-cols-2">
+      <div>
+        <label class="label" for="s-dl-mode">Default mode</label>
+        <select id="s-dl-mode" name="download.mode" class="w-full">
+          {% for m in ['sync', 'async_streaming', 'hybrid'] %}
+            <option value="{{ m }}" {% if settings['download.mode'] == m %}selected{% endif %}>{{ m }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="label" for="s-dl-hybrid">Hybrid threshold (MB)</label>
+        <input id="s-dl-hybrid" type="number" name="download.hybrid_threshold_mb" class="w-full"
+               value="{{ settings['download.hybrid_threshold_mb'] }}" min="1">
+      </div>
+      <div>
+        <label class="label" for="s-dl-timeout">Per-download timeout (s)</label>
+        <input id="s-dl-timeout" type="number" name="download.timeout_seconds" class="w-full"
+               value="{{ settings['download.timeout_seconds'] }}" min="10">
+      </div>
+      <div>
+        <label class="label" for="s-dl-maxsize">Max file size (GB)</label>
+        <input id="s-dl-maxsize" type="number" step="0.1" name="download.max_size_gb" class="w-full"
+               value="{{ settings['download.max_size_gb'] }}" min="0.1">
+      </div>
+    </div>
   </div>
 </div>
 
 <div class="card">
-  <h2 class="text-lg font-semibold mb-3">Torrents</h2>
-  <div class="grid gap-3 md:grid-cols-2">
-    <label class="block">
-      <span class="label">Default mode</span>
-      <select name="torrent.mode" class="input">
-        {% for m in ['active_seed', 'webseed'] %}
-          <option value="{{ m }}" {% if settings['torrent.mode'] == m %}selected{% endif %}>{{ m }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label class="block">
-      <span class="label">Seed retention (hours)</span>
-      <input type="number" name="torrent.seed_retention_hours" class="input"
-             value="{{ settings['torrent.seed_retention_hours'] }}" min="1">
-    </label>
-    <label class="block">
-      <span class="label">Tracker port</span>
-      <input type="number" name="torrent.tracker_port" class="input"
-             value="{{ settings['torrent.tracker_port'] }}" min="1024" max="65535">
-    </label>
-    <label class="block">
-      <span class="label">Max concurrent seeds</span>
-      <input type="number" name="torrent.max_concurrent_seeds" class="input"
-             value="{{ settings['torrent.max_concurrent_seeds'] }}" min="1">
-    </label>
-    <label class="block">
-      <span class="label">Listen port range (min)</span>
-      <input type="number" name="torrent.listen_port_min" class="input"
-             value="{{ settings['torrent.listen_port_min'] }}">
-    </label>
-    <label class="block">
-      <span class="label">Listen port range (max)</span>
-      <input type="number" name="torrent.listen_port_max" class="input"
-             value="{{ settings['torrent.listen_port_max'] }}">
-    </label>
-  </div>
-  <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-    Port / listen-range changes take effect on next restart.
-  </p>
-</div>
-
-<div class="card">
-  <h2 class="text-lg font-semibold mb-3">Bypass (Cloudflare)</h2>
-  <div class="grid gap-3 md:grid-cols-2">
-    <label class="block">
-      <span class="label">Mode</span>
-      <select name="bypass.mode" class="input">
-        {% for m in ['external', 'internal', 'auto'] %}
-          <option value="{{ m }}" {% if settings['bypass.mode'] == m %}selected{% endif %}>{{ m }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label class="block">
-      <span class="label">FlareSolverr URL</span>
-      <input type="url" name="bypass.flaresolverr_url" class="input"
-             value="{{ settings['bypass.flaresolverr_url'] }}">
-    </label>
-    <label class="block">
-      <span class="label">Session cache TTL (min)</span>
-      <input type="number" name="bypass.session_cache_ttl_min" class="input"
-             value="{{ settings['bypass.session_cache_ttl_min'] }}" min="1">
-    </label>
+  <div class="card-body space-y-4">
+    <h2 class="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Torrents</h2>
+    <div class="grid gap-4 md:grid-cols-2">
+      <div>
+        <label class="label" for="s-t-mode">Default mode</label>
+        <select id="s-t-mode" name="torrent.mode" class="w-full">
+          {% for m in ['active_seed', 'webseed'] %}
+            <option value="{{ m }}" {% if settings['torrent.mode'] == m %}selected{% endif %}>{{ m }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="label" for="s-t-ret">Seed retention (hours)</label>
+        <input id="s-t-ret" type="number" name="torrent.seed_retention_hours" class="w-full"
+               value="{{ settings['torrent.seed_retention_hours'] }}" min="1">
+      </div>
+      <div>
+        <label class="label" for="s-t-port">Tracker port</label>
+        <input id="s-t-port" type="number" name="torrent.tracker_port" class="w-full"
+               value="{{ settings['torrent.tracker_port'] }}" min="1024" max="65535">
+      </div>
+      <div>
+        <label class="label" for="s-t-max">Max concurrent seeds</label>
+        <input id="s-t-max" type="number" name="torrent.max_concurrent_seeds" class="w-full"
+               value="{{ settings['torrent.max_concurrent_seeds'] }}" min="1">
+      </div>
+      <div>
+        <label class="label" for="s-t-pmin">Listen port range (min)</label>
+        <input id="s-t-pmin" type="number" name="torrent.listen_port_min" class="w-full"
+               value="{{ settings['torrent.listen_port_min'] }}">
+      </div>
+      <div>
+        <label class="label" for="s-t-pmax">Listen port range (max)</label>
+        <input id="s-t-pmax" type="number" name="torrent.listen_port_max" class="w-full"
+               value="{{ settings['torrent.listen_port_max'] }}">
+      </div>
+    </div>
+    <p class="text-xs text-gray-500 dark:text-gray-400">
+      Port / listen-range changes take effect on next restart.
+    </p>
   </div>
 </div>
 
 <div class="card">
-  <h2 class="text-lg font-semibold mb-3">Rate limits</h2>
-  <div class="grid gap-3 md:grid-cols-2">
-    <label class="block">
-      <span class="label">AA — search/min</span>
-      <input type="number" name="rate_limit.anna_archive.search_per_min" class="input"
-             value="{{ settings['rate_limit.anna_archive.search_per_min'] }}" min="1">
-    </label>
-    <label class="block">
-      <span class="label">AA — parallel downloads</span>
-      <input type="number" name="rate_limit.anna_archive.parallel_downloads" class="input"
-             value="{{ settings['rate_limit.anna_archive.parallel_downloads'] }}" min="1">
-    </label>
-    <label class="block">
-      <span class="label">LibGen — requests/min</span>
-      <input type="number" name="rate_limit.libgen.requests_per_min" class="input"
-             value="{{ settings['rate_limit.libgen.requests_per_min'] }}" min="1">
-    </label>
-    <label class="block">
-      <span class="label">Z-Library — requests/min</span>
-      <input type="number" name="rate_limit.zlibrary.requests_per_min" class="input"
-             value="{{ settings['rate_limit.zlibrary.requests_per_min'] }}" min="1">
-    </label>
-    <label class="block">
-      <span class="label">Z-Library — daily quota</span>
-      <input type="number" name="rate_limit.zlibrary.daily_quota" class="input"
-             value="{{ settings['rate_limit.zlibrary.daily_quota'] }}" min="0">
-    </label>
-    <label class="block">
-      <span class="label">Internet Archive — requests/min</span>
-      <input type="number" name="rate_limit.internet_archive.requests_per_min" class="input"
-             value="{{ settings['rate_limit.internet_archive.requests_per_min'] }}" min="1">
-    </label>
+  <div class="card-body space-y-4">
+    <div class="flex items-center justify-between gap-3">
+      <h2 class="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+        Bypass (Cloudflare)
+      </h2>
+      <button type="button" class="btn-secondary btn-sm" onclick="testFlareSolverr()">
+        Test FlareSolverr
+      </button>
+    </div>
+    <div class="grid gap-4 md:grid-cols-2">
+      <div>
+        <label class="label" for="s-b-mode">Mode</label>
+        <select id="s-b-mode" name="bypass.mode" class="w-full">
+          {% for m in ['external', 'internal', 'auto'] %}
+            <option value="{{ m }}" {% if settings['bypass.mode'] == m %}selected{% endif %}>{{ m }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="label" for="s-b-url">FlareSolverr URL</label>
+        <input id="s-b-url" type="url" name="bypass.flaresolverr_url" class="w-full font-mono"
+               value="{{ settings['bypass.flaresolverr_url'] }}"
+               placeholder="http://192.168.1.50:8191">
+        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          Host &amp; port only — <code>/v1</code> is appended automatically.
+          Or set <code>FLARESOLVERR_URL</code> env var before launching.
+        </p>
+      </div>
+      <div>
+        <label class="label" for="s-b-ttl">Session cache TTL (min)</label>
+        <input id="s-b-ttl" type="number" name="bypass.session_cache_ttl_min" class="w-full"
+               value="{{ settings['bypass.session_cache_ttl_min'] }}" min="1">
+      </div>
+    </div>
   </div>
 </div>
 
 <div class="card">
-  <h2 class="text-lg font-semibold mb-3">Metadata (Internet Archive)</h2>
-  <div class="grid gap-3 md:grid-cols-2">
-    <label class="block md:col-span-2">
-      <span class="label">Contact email (per IA policy)</span>
-      <input type="email" name="metadata.ia_contact_email" class="input"
-             value="{{ settings['metadata.ia_contact_email'] }}"
-             placeholder="you@example.com">
-    </label>
-    <label class="block md:col-span-2">
-      <span class="label">User-Agent suffix (optional)</span>
-      <input type="text" name="metadata.user_agent_suffix" class="input"
-             value="{{ settings['metadata.user_agent_suffix'] }}">
-    </label>
+  <div class="card-body space-y-4">
+    <h2 class="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Rate limits</h2>
+    <div class="grid gap-4 md:grid-cols-2">
+      <div>
+        <label class="label" for="s-r-aa-s">AA — search/min</label>
+        <input id="s-r-aa-s" type="number" name="rate_limit.anna_archive.search_per_min" class="w-full"
+               value="{{ settings['rate_limit.anna_archive.search_per_min'] }}" min="1">
+      </div>
+      <div>
+        <label class="label" for="s-r-aa-p">AA — parallel downloads</label>
+        <input id="s-r-aa-p" type="number" name="rate_limit.anna_archive.parallel_downloads" class="w-full"
+               value="{{ settings['rate_limit.anna_archive.parallel_downloads'] }}" min="1">
+      </div>
+      <div>
+        <label class="label" for="s-r-lg">LibGen — requests/min</label>
+        <input id="s-r-lg" type="number" name="rate_limit.libgen.requests_per_min" class="w-full"
+               value="{{ settings['rate_limit.libgen.requests_per_min'] }}" min="1">
+      </div>
+      <div>
+        <label class="label" for="s-r-zr">Z-Library — requests/min</label>
+        <input id="s-r-zr" type="number" name="rate_limit.zlibrary.requests_per_min" class="w-full"
+               value="{{ settings['rate_limit.zlibrary.requests_per_min'] }}" min="1">
+      </div>
+      <div>
+        <label class="label" for="s-r-zq">Z-Library — daily quota</label>
+        <input id="s-r-zq" type="number" name="rate_limit.zlibrary.daily_quota" class="w-full"
+               value="{{ settings['rate_limit.zlibrary.daily_quota'] }}" min="0">
+      </div>
+      <div>
+        <label class="label" for="s-r-ia">Internet Archive — requests/min</label>
+        <input id="s-r-ia" type="number" name="rate_limit.internet_archive.requests_per_min" class="w-full"
+               value="{{ settings['rate_limit.internet_archive.requests_per_min'] }}" min="1">
+      </div>
+    </div>
   </div>
 </div>
 
 <div class="card">
-  <h2 class="text-lg font-semibold mb-3">Notifications</h2>
-  <label class="block">
-    <span class="label">Flap-suppression cooldown (minutes)</span>
-    <input type="number" name="notifications.flap_cooldown_minutes" class="input"
-           value="{{ settings['notifications.flap_cooldown_minutes'] }}" min="0">
-  </label>
-  <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-    Applies to source_unhealthy / source_recovered / bypass_failed events.
-    quota_exhausted always uses an until-midnight-UTC cooldown regardless.
-  </p>
+  <div class="card-body space-y-4">
+    <h2 class="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+      Metadata (Internet Archive)
+    </h2>
+    <div class="grid gap-4 md:grid-cols-2">
+      <div class="md:col-span-2">
+        <label class="label" for="s-m-email">Contact email (per IA policy)</label>
+        <input id="s-m-email" type="email" name="metadata.ia_contact_email" class="w-full"
+               value="{{ settings['metadata.ia_contact_email'] }}"
+               placeholder="you@example.com">
+      </div>
+      <div class="md:col-span-2">
+        <label class="label" for="s-m-ua">User-Agent suffix (optional)</label>
+        <input id="s-m-ua" type="text" name="metadata.user_agent_suffix" class="w-full"
+               value="{{ settings['metadata.user_agent_suffix'] }}">
+      </div>
+    </div>
+  </div>
 </div>
 
-<div class="flex gap-3">
+<div class="card">
+  <div class="card-body space-y-4">
+    <h2 class="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Notifications</h2>
+    <div>
+      <label class="label" for="s-n-flap">Flap-suppression cooldown (minutes)</label>
+      <input id="s-n-flap" type="number" name="notifications.flap_cooldown_minutes" class="w-full md:w-1/2"
+             value="{{ settings['notifications.flap_cooldown_minutes'] }}" min="0">
+    </div>
+    <p class="text-xs text-gray-500 dark:text-gray-400">
+      Applies to <code>source_unhealthy</code> / <code>source_recovered</code> /
+      <code>bypass_failed</code> events. <code>quota_exhausted</code> always uses
+      an until-midnight-UTC cooldown regardless.
+    </p>
+  </div>
+</div>
+
+<div class="flex flex-wrap gap-3">
   <button type="submit" class="btn-primary">Save settings</button>
   <a href="/" class="btn-ghost">Cancel</a>
 </div>
@@ -185,7 +216,6 @@
     const fd = new FormData(document.getElementById('settings-form'));
     const body = {};
     for (const [k, v] of fd.entries()) {
-      // Coerce numeric strings back to numbers where the backend expects ints.
       if (/^(\d+|\d+\.\d+)$/.test(v)) body[k] = Number(v);
       else body[k] = v;
     }
@@ -198,6 +228,52 @@
     toast('Settings saved', 'ok');
     setTimeout(() => window.location.reload(), 400);
     return false;
+  }
+
+  async function testFlareSolverr() {
+    const url = document.getElementById('s-b-url').value.trim();
+    showModal({
+      title: 'Testing FlareSolverr',
+      html: '<p class="text-sm text-gray-600 dark:text-gray-400">Probing endpoint — this may take up to 30s while FlareSolverr solves a CF challenge.</p>',
+      actions: [{ label: 'Close', class: 'btn-ghost' }],
+    });
+    try {
+      const r = await fetch('/api/bypass/test', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(url ? {url} : {}),
+      });
+      const data = await r.json();
+      const ok = data.status === 'ok';
+      const kind = ok ? 'success' : 'error';
+      document.querySelector('.modal-panel')?.remove();
+      document.querySelector('.modal-backdrop')?.remove();
+      showModal({
+        title: `FlareSolverr — ${ok ? 'OK' : 'failed'}`,
+        html: `
+          <dl class="space-y-3 text-sm">
+            <div><dt class="text-xs uppercase text-gray-500 dark:text-gray-400">Status</dt>
+                 <dd class="mt-1"><span class="badge-${kind}">${data.status || '—'}</span></dd></div>
+            <div><dt class="text-xs uppercase text-gray-500 dark:text-gray-400">Endpoint</dt>
+                 <dd class="mt-1 font-mono text-xs break-all">${data.endpoint || '—'}</dd></div>
+            <div><dt class="text-xs uppercase text-gray-500 dark:text-gray-400">Probe target</dt>
+                 <dd class="mt-1 font-mono text-xs break-all">${data.probe_target || '—'}</dd></div>
+            <div><dt class="text-xs uppercase text-gray-500 dark:text-gray-400">Elapsed</dt>
+                 <dd class="mt-1">${data.elapsed_ms != null ? data.elapsed_ms + ' ms' : '—'}</dd></div>
+            ${data.flaresolverr_version ? `
+              <div><dt class="text-xs uppercase text-gray-500 dark:text-gray-400">FlareSolverr version</dt>
+                   <dd class="mt-1 font-mono text-xs">${data.flaresolverr_version}</dd></div>` : ''}
+            ${data.message ? `
+              <div><dt class="text-xs uppercase text-gray-500 dark:text-gray-400">Message</dt>
+                   <dd class="mt-1 font-mono text-xs break-all bg-gray-100 dark:bg-gray-800 rounded p-2">${data.message}</dd></div>` : ''}
+          </dl>`,
+        actions: [{ label: 'Close', class: 'btn-primary' }],
+      });
+    } catch (err) {
+      document.querySelector('.modal-panel')?.remove();
+      document.querySelector('.modal-backdrop')?.remove();
+      toast('Test request failed: ' + err, 'err', 5000);
+    }
   }
 </script>
 {% endraw %}
