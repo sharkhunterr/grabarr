@@ -50,7 +50,7 @@ def _source_results_are_releases(source: Any) -> bool:
     normalized_source = normalize_source(source)
     if normalized_source in {"", "*"}:
         return False
-    from shelfmark.release_sources import source_results_are_releases
+    from grabarr.vendor.shelfmark.release_sources import source_results_are_releases
     return source_results_are_releases(normalized_source)
 
 
@@ -183,7 +183,7 @@ def _normalize_rule_source(source: Any) -> str | None:
 def get_source_content_type_capabilities() -> dict[str, set[str]]:
     """Return source -> supported content type map from registered sources."""
     try:
-        from shelfmark.release_sources import list_available_sources
+        from grabarr.vendor.shelfmark.release_sources import list_available_sources
     except Exception:
         return {}
 

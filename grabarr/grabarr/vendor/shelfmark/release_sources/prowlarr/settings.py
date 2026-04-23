@@ -26,8 +26,8 @@ def _get_indexer_options() -> List[Dict[str, str]]:
 
     Returns list of {value: "id", label: "name (protocol)"} options.
     """
-    from shelfmark.core.config import config
-    from shelfmark.core.logger import setup_logger
+    from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy as config
+    from grabarr.core.logging import setup_logger
 
     logger = setup_logger(__name__)
 
@@ -42,7 +42,7 @@ def _get_indexer_options() -> List[Dict[str, str]]:
         return []
 
     try:
-        from shelfmark.release_sources.prowlarr.api import ProwlarrClient
+        from grabarr.vendor.shelfmark.release_sources.prowlarr.api import ProwlarrClient
 
         client = ProwlarrClient(url, api_key)
         indexers = client.get_enabled_indexers()
@@ -76,8 +76,8 @@ def _get_indexer_options() -> List[Dict[str, str]]:
 
 def _test_prowlarr_connection(current_values: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Test the Prowlarr connection using current form values."""
-    from shelfmark.core.config import config
-    from shelfmark.release_sources.prowlarr.api import ProwlarrClient
+    from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy as config
+    from grabarr.vendor.shelfmark.release_sources.prowlarr.api import ProwlarrClient
 
     current_values = current_values or {}
 

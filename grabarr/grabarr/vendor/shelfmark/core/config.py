@@ -19,7 +19,7 @@ def _get_registry():
     """Lazy import of settings registry to avoid circular imports."""
     global _registry_module
     if _registry_module is None:
-        from shelfmark.core import settings_registry
+        from grabarr.vendor.shelfmark.core import settings_registry
         _registry_module = settings_registry
     return _registry_module
 
@@ -28,7 +28,7 @@ def _get_env():
     """Lazy import of env module for fallback values."""
     global _env_module
     if _env_module is None:
-        from shelfmark.config import env
+        from grabarr.vendor.shelfmark.config import env
         _env_module = env
     return _env_module
 
@@ -37,7 +37,7 @@ def _get_user_db_module():
     """Lazy import of user DB module to avoid optional dependency loops."""
     global _user_db_module
     if _user_db_module is None:
-        from shelfmark.core.user_db import UserDB
+        from grabarr.vendor.shelfmark.core.user_db import UserDB
         _user_db_module = UserDB
     return _user_db_module
 
@@ -88,12 +88,12 @@ class Config:
         # Ensure all settings modules are imported before loading
         # This handles cases where config is accessed before settings are registered
         try:
-            import shelfmark.config.settings  # noqa: F401 - main app settings
-            import shelfmark.config.security  # noqa: F401 - security/auth settings
-            import shelfmark.config.notifications_settings  # noqa: F401 - notifications settings
-            import shelfmark.config.users_settings  # noqa: F401 - users/request settings
-            import shelfmark.release_sources  # noqa: F401 - plugin settings
-            import shelfmark.metadata_providers  # noqa: F401 - plugin settings
+            import grabarr.vendor.shelfmark.config.settings  # noqa: F401 - main app settings
+            import grabarr.vendor.shelfmark.config.security  # noqa: F401 - security/auth settings
+            import grabarr.vendor.shelfmark.config.notifications_settings  # noqa: F401 - notifications settings
+            import grabarr.vendor.shelfmark.config.users_settings  # noqa: F401 - users/request settings
+            import grabarr.vendor.shelfmark.release_sources  # noqa: F401 - plugin settings
+            import grabarr.vendor.shelfmark.metadata_providers  # noqa: F401 - plugin settings
         except ImportError:
             pass
 

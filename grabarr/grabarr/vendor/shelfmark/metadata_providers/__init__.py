@@ -435,7 +435,7 @@ def register_provider_kwargs(name: str):
     Example:
         @register_provider_kwargs("hardcover")
         def _hardcover_kwargs() -> Dict:
-            from shelfmark.core.config import config
+            from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy as config
             return {"api_key": config.get("HARDCOVER_API_KEY", "")}
     """
     def decorator(fn):
@@ -474,8 +474,7 @@ def is_provider_registered(provider_name: str) -> bool:
 
 def is_provider_enabled(provider_name: str) -> bool:
     """Check if a provider is enabled in settings."""
-    from shelfmark.core.config import config as app_config
-
+    from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy as app_config
     # Refresh config to get latest settings
     app_config.refresh()
 
@@ -494,8 +493,7 @@ def get_configured_provider(
     user_id: Optional[int] = None,
 ) -> Optional[MetadataProvider]:
     """Get the currently configured metadata provider for the content type."""
-    from shelfmark.core.config import config as app_config
-
+    from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy as app_config
     # Refresh config to ensure we have the latest saved settings
     app_config.refresh()
 
@@ -527,8 +525,7 @@ def get_configured_provider_name(
     fallback_to_main: bool = True,
 ) -> str:
     """Get the configured metadata provider name for a content type."""
-    from shelfmark.core.config import config as app_config
-
+    from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy as app_config
     app_config.refresh()
 
     if content_type == "combined":
@@ -611,8 +608,7 @@ def get_provider_default_sort(
     user_id: Optional[int] = None,
 ) -> str:
     """Get the default sort order for a metadata provider."""
-    from shelfmark.core.config import config as app_config
-
+    from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy as app_config
     if provider_name is None:
         provider_name = get_configured_provider_name(user_id=user_id)
 
@@ -631,8 +627,8 @@ def sync_metadata_provider_selection() -> None:
     auto-select the first enabled provider. This should be called after
     enabling/disabling a provider.
     """
-    from shelfmark.core.config import config as app_config
-    from shelfmark.core.settings_registry import save_config_file, load_config_file
+    from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy as app_config
+    from grabarr.vendor.shelfmark.core.settings_registry import save_config_file, load_config_file
 
     app_config.refresh()
 
@@ -657,17 +653,17 @@ def sync_metadata_provider_selection() -> None:
 # Import provider implementations to trigger registration
 # These must be imported AFTER the base classes and registry are defined
 try:
-    from shelfmark.metadata_providers import hardcover  # noqa: F401, E402
+    from grabarr.vendor.shelfmark.metadata_providers import hardcover  # noqa: F401, E402
 except ImportError:
     pass  # Hardcover provider is optional
 
 try:
-    from shelfmark.metadata_providers import openlibrary  # noqa: F401, E402
+    from grabarr.vendor.shelfmark.metadata_providers import openlibrary  # noqa: F401, E402
 except ImportError:
     pass  # Open Library provider is optional
 
 try:
-    from shelfmark.metadata_providers import googlebooks  # noqa: F401, E402
+    from grabarr.vendor.shelfmark.metadata_providers import googlebooks  # noqa: F401, E402
 except ImportError:
     pass  # Google Books provider is optional
 

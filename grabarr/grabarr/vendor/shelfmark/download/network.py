@@ -964,7 +964,7 @@ def _looks_like_ip(s: str) -> bool:
 
 def _build_aa_urls() -> List[str]:
     """Build list of available AA URLs from centralized mirror config."""
-    from shelfmark.core.mirrors import get_aa_mirrors
+    from grabarr.vendor.shelfmark.core.mirrors import get_aa_mirrors
     return get_aa_mirrors()
 
 

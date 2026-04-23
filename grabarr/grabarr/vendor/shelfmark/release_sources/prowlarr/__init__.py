@@ -20,8 +20,8 @@ from grabarr.vendor.shelfmark.release_sources.prowlarr import settings  # noqa: 
 # Import shared download clients/settings to trigger registration.
 # This is in a try/except to handle optional dependencies gracefully.
 try:
-    from shelfmark.download import clients  # noqa: F401
-    from shelfmark.download.clients import settings as client_settings  # noqa: F401
+    from grabarr.vendor.shelfmark.download import clients  # noqa: F401
+    from grabarr.vendor.shelfmark.download.clients import settings as client_settings  # noqa: F401
 except ImportError as e:
     import logging
 

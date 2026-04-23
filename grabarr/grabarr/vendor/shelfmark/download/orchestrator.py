@@ -46,7 +46,7 @@ logger = setup_logger(__name__)
 # Track whether WebSocket is available for status reporting
 WEBSOCKET_AVAILABLE = True
 try:
-    from shelfmark.api.websocket import ws_manager
+    from grabarr.vendor.shelfmark.api.websocket import ws_manager
 except ImportError:
     logger.error("WebSocket unavailable - real-time updates disabled")
     ws_manager = None

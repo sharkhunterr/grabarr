@@ -117,8 +117,8 @@ logger.info("Socket.IO CORS allowed origins: %s", socketio_cors_allowed_origins)
 # This prevents a race condition where the download loop could try to process
 # a queued task before its handler (e.g., prowlarr) is registered.
 try:
-    import shelfmark.metadata_providers  # noqa: F401
-    import shelfmark.release_sources  # noqa: F401
+    import grabarr.vendor.shelfmark.metadata_providers  # noqa: F401
+    import grabarr.vendor.shelfmark.release_sources  # noqa: F401
     logger.debug("Plugin modules loaded successfully")
 except ImportError as e:
     logger.warning(f"Failed to import plugin modules: {e}")
@@ -140,10 +140,10 @@ try:
     user_db.initialize()
     download_history_service = DownloadHistoryService(_user_db_path)
     activity_view_state_service = ActivityViewStateService(_user_db_path)
-    import shelfmark.config.users_settings as _  # noqa: F401 - registers users tab
-    from shelfmark.core.oidc_routes import register_oidc_routes
-    from shelfmark.core.admin_routes import register_admin_routes
-    from shelfmark.core.self_user_routes import register_self_user_routes
+    import grabarr.vendor.shelfmark.config.users_settings as _  # noqa: F401 - registers users tab
+    from grabarr.vendor.shelfmark.core.oidc_routes import register_oidc_routes
+    from grabarr.vendor.shelfmark.core.admin_routes import register_admin_routes
+    from grabarr.vendor.shelfmark.core.self_user_routes import register_self_user_routes
     register_oidc_routes(app, user_db)
     register_admin_routes(app, user_db)
     register_self_user_routes(app, user_db)
@@ -406,8 +406,8 @@ def _resolve_download_user_context(
 
 if user_db is not None:
     try:
-        from shelfmark.core.request_routes import register_request_routes
-        from shelfmark.core.activity_routes import register_activity_routes
+        from grabarr.vendor.shelfmark.core.request_routes import register_request_routes
+        from grabarr.vendor.shelfmark.core.activity_routes import register_activity_routes
 
         register_request_routes(
             app,
@@ -552,7 +552,7 @@ def proxy_auth_middleware():
     if request.path == '/api/health':
         return None
 
-    from shelfmark.core.settings_registry import load_config_file
+    from grabarr.vendor.shelfmark.core.settings_registry import load_config_file
 
     def get_proxy_header(header_name: str) -> str | None:
         """Resolve proxy auth values from headers with WSGI env fallbacks."""
@@ -688,7 +688,7 @@ def login_required(f):
 
         # Check admin access for settings/onboarding endpoints.
         if is_settings_or_onboarding_path(request.path):
-            from shelfmark.core.settings_registry import load_config_file
+            from grabarr.vendor.shelfmark.core.settings_registry import load_config_file
 
             try:
                 users_config = load_config_file("users")
@@ -772,7 +772,7 @@ if DEBUG:
     if app_config.get("USING_EXTERNAL_BYPASSER", False):
         _stop_gui = lambda: None
     else:
-        from shelfmark.bypass.internal_bypasser import _cleanup_orphan_processes as _stop_gui
+        from grabarr.vendor.shelfmark.bypass.internal_bypasser import _cleanup_orphan_processes as _stop_gui
 
     @app.route('/api/debug', methods=['GET'])
     @login_required
@@ -832,7 +832,7 @@ def _parse_search_filters_from_request() -> SearchFilters:
 
 def _build_source_query_book(query_text: str, filters: SearchFilters):
     """Build a synthetic book context for source-native browse searches."""
-    from shelfmark.metadata_providers import BookMetadata
+    from grabarr.vendor.shelfmark.metadata_providers import BookMetadata
 
     author_values = [value.strip() for value in (filters.author or []) if str(value).strip()]
     title_values = [value.strip() for value in (filters.title or []) if str(value).strip()]
@@ -866,7 +866,7 @@ def _serialize_browse_record(record) -> dict:
 
     preview = result.get("preview")
     if isinstance(preview, str) and preview:
-        from shelfmark.core.utils import transform_cover_url
+        from grabarr.vendor.shelfmark.core.utils import transform_cover_url
 
         result["preview"] = transform_cover_url(preview, record.id)
 
@@ -876,7 +876,7 @@ def _serialize_browse_record(record) -> dict:
 def _serialize_release(release) -> dict:
     """Serialize a release for the frontend, normalizing preview URLs."""
     from dataclasses import asdict
-    from shelfmark.core.utils import transform_cover_url
+    from grabarr.vendor.shelfmark.core.utils import transform_cover_url
 
     result = asdict(release)
     extra = result.get("extra")
@@ -968,13 +968,13 @@ def api_config() -> Union[Response, Tuple[Response, int]]:
     are reflected without requiring a container restart.
     """
     try:
-        from shelfmark.metadata_providers import (
+        from grabarr.vendor.shelfmark.metadata_providers import (
             get_provider_sort_options,
             get_provider_search_fields,
             get_provider_default_sort,
         )
-        from shelfmark.config.env import _is_config_dir_writable
-        from shelfmark.core.onboarding import is_onboarding_complete as _get_onboarding_complete
+        from grabarr.vendor.shelfmark.config.env import _is_config_dir_writable
+        from grabarr.vendor.shelfmark.core.onboarding import is_onboarding_complete as _get_onboarding_complete
 
         db_user_id = get_session_db_user_id(session)
 
@@ -1428,8 +1428,8 @@ def api_cover(cover_id: str) -> Union[Response, Tuple[Response, int]]:
     """
     try:
         import base64
-        from shelfmark.core.image_cache import get_image_cache
-        from shelfmark.config.env import is_covers_cache_enabled
+        from grabarr.vendor.shelfmark.core.image_cache import get_image_cache
+        from grabarr.vendor.shelfmark.config.env import is_covers_cache_enabled
 
         # Check if caching is enabled
         if not is_covers_cache_enabled():
@@ -1860,7 +1860,7 @@ def api_logout() -> Union[Response, Tuple[Response, int]]:
     Returns:
         flask.Response: JSON with success status and optional logout_url.
     """
-    from shelfmark.core.settings_registry import load_config_file
+    from grabarr.vendor.shelfmark.core.settings_registry import load_config_file
     
     try:
         auth_mode = get_auth_mode()
@@ -1890,7 +1890,7 @@ def api_auth_check() -> Union[Response, Tuple[Response, int]]:
         flask.Response: JSON with authentication status, whether auth is required,
         which auth mode is active, and whether user has admin privileges.
     """
-    from shelfmark.core.settings_registry import load_config_file
+    from grabarr.vendor.shelfmark.core.settings_registry import load_config_file
 
     try:
         security_config = load_config_file("security")
@@ -1966,7 +1966,7 @@ def api_metadata_providers() -> Union[Response, Tuple[Response, int]]:
         flask.Response: JSON with list of providers and their status.
     """
     try:
-        from shelfmark.metadata_providers import (
+        from grabarr.vendor.shelfmark.metadata_providers import (
             get_configured_provider_name,
             list_providers,
             get_provider,
@@ -2027,7 +2027,7 @@ def api_metadata_providers() -> Union[Response, Tuple[Response, int]]:
 def api_metadata_config() -> Union[Response, Tuple[Response, int]]:
     """Return provider-specific metadata search config for the active session."""
     try:
-        from shelfmark.metadata_providers import (
+        from grabarr.vendor.shelfmark.metadata_providers import (
             get_configured_provider_name,
             get_provider_capabilities,
             get_provider,
@@ -2103,7 +2103,7 @@ def api_metadata_search() -> Union[Response, Tuple[Response, int]]:
         flask.Response: JSON with list of books from metadata provider.
     """
     try:
-        from shelfmark.metadata_providers import (
+        from grabarr.vendor.shelfmark.metadata_providers import (
             get_provider,
             get_configured_provider,
             get_provider_kwargs,
@@ -2198,7 +2198,7 @@ def api_metadata_search() -> Union[Response, Tuple[Response, int]]:
         books_data = [asdict(book) for book in search_result.books]
 
         # Transform cover_url to local proxy URLs when caching is enabled
-        from shelfmark.core.utils import transform_cover_url
+        from grabarr.vendor.shelfmark.core.utils import transform_cover_url
         for book_dict in books_data:
             if book_dict.get('cover_url'):
                 cache_id = f"{book_dict['provider']}_{book_dict['provider_id']}"
@@ -2227,7 +2227,7 @@ def api_metadata_search() -> Union[Response, Tuple[Response, int]]:
 def api_metadata_field_options() -> Response:
     """Return dynamic search-field options for a metadata provider."""
     try:
-        from shelfmark.metadata_providers import (
+        from grabarr.vendor.shelfmark.metadata_providers import (
             get_configured_provider,
             get_provider,
             get_provider_kwargs,
@@ -2268,7 +2268,7 @@ def _resolve_metadata_provider(provider_name: str):
 
     Raises appropriate HTTP-friendly exceptions on failure.
     """
-    from shelfmark.metadata_providers import (
+    from grabarr.vendor.shelfmark.metadata_providers import (
         get_provider,
         get_provider_kwargs,
         is_provider_registered,
@@ -2311,7 +2311,7 @@ def api_metadata_book(provider: str, book_id: str) -> Union[Response, Tuple[Resp
         book_dict = asdict(book)
 
         # Transform cover_url to local proxy URL when caching is enabled
-        from shelfmark.core.utils import transform_cover_url
+        from grabarr.vendor.shelfmark.core.utils import transform_cover_url
         if book_dict.get('cover_url'):
             cache_id = f"{provider}_{book_id}"
             book_dict['cover_url'] = transform_cover_url(book_dict['cover_url'], cache_id)
@@ -2416,20 +2416,20 @@ def api_releases() -> Union[Response, Tuple[Response, int]]:
     """
     try:
         from dataclasses import asdict
-        from shelfmark.metadata_providers import (
+        from grabarr.vendor.shelfmark.metadata_providers import (
             BookMetadata,
             get_provider,
             is_provider_registered,
             get_provider_kwargs,
         )
-        from shelfmark.release_sources import (
+        from grabarr.vendor.shelfmark.release_sources import (
             browse_record_to_book_metadata,
             get_source,
             list_available_sources,
             serialize_column_config,
             source_results_are_releases,
         )
-        from shelfmark.core.search_plan import build_release_search_plan
+        from grabarr.vendor.shelfmark.core.search_plan import build_release_search_plan
         provider = request.args.get('provider', '').strip()
         book_id = request.args.get('book_id', '').strip()
         source_filter = request.args.get('source', '').strip()
@@ -2581,7 +2581,7 @@ def api_releases() -> Union[Response, Tuple[Response, int]]:
 
         # Convert book to dict and transform cover_url
         book_dict = asdict(book)
-        from shelfmark.core.utils import transform_cover_url
+        from grabarr.vendor.shelfmark.core.utils import transform_cover_url
         if book_dict.get('cover_url'):
             cache_id = f"{provider}_{book_id}"
             book_dict['cover_url'] = transform_cover_url(book_dict['cover_url'], cache_id)
@@ -2634,7 +2634,7 @@ def api_release_sources() -> Union[Response, Tuple[Response, int]]:
         flask.Response: JSON list of available release sources.
     """
     try:
-        from shelfmark.release_sources import list_available_sources
+        from grabarr.vendor.shelfmark.release_sources import list_available_sources
         sources = list_available_sources()
         return jsonify(sources)
     except Exception as e:
@@ -2647,7 +2647,7 @@ def api_release_sources() -> Union[Response, Tuple[Response, int]]:
 def api_release_source_record(source_name: str, record_id: str) -> Union[Response, Tuple[Response, int]]:
     """Resolve a source-native browse record for a release source."""
     try:
-        from shelfmark.release_sources import get_source
+        from grabarr.vendor.shelfmark.release_sources import get_source
 
         source = get_source(source_name)
         record = source.get_record(record_id)
@@ -2674,14 +2674,14 @@ def api_settings_get_all() -> Union[Response, Tuple[Response, int]]:
         flask.Response: JSON with all settings tabs.
     """
     try:
-        from shelfmark.core.settings_registry import serialize_all_settings
+        from grabarr.vendor.shelfmark.core.settings_registry import serialize_all_settings
 
         # Ensure settings are registered by importing settings modules
         # This triggers the @register_settings decorators
-        import shelfmark.config.settings  # noqa: F401
-        import shelfmark.config.security  # noqa: F401
-        import shelfmark.config.users_settings  # noqa: F401
-        import shelfmark.config.notifications_settings  # noqa: F401
+        import grabarr.vendor.shelfmark.config.settings  # noqa: F401
+        import grabarr.vendor.shelfmark.config.security  # noqa: F401
+        import grabarr.vendor.shelfmark.config.users_settings  # noqa: F401
+        import grabarr.vendor.shelfmark.config.notifications_settings  # noqa: F401
 
         data = serialize_all_settings(include_values=True)
         return jsonify(data)
@@ -2703,16 +2703,16 @@ def api_settings_get_tab(tab_name: str) -> Union[Response, Tuple[Response, int]]
         flask.Response: JSON with tab settings and values.
     """
     try:
-        from shelfmark.core.settings_registry import (
+        from grabarr.vendor.shelfmark.core.settings_registry import (
             get_settings_tab,
             serialize_tab,
         )
 
         # Ensure settings are registered
-        import shelfmark.config.settings  # noqa: F401
-        import shelfmark.config.security  # noqa: F401
-        import shelfmark.config.users_settings  # noqa: F401
-        import shelfmark.config.notifications_settings  # noqa: F401
+        import grabarr.vendor.shelfmark.config.settings  # noqa: F401
+        import grabarr.vendor.shelfmark.config.security  # noqa: F401
+        import grabarr.vendor.shelfmark.config.users_settings  # noqa: F401
+        import grabarr.vendor.shelfmark.config.notifications_settings  # noqa: F401
 
         tab = get_settings_tab(tab_name)
         if not tab:
@@ -2740,16 +2740,16 @@ def api_settings_update_tab(tab_name: str) -> Union[Response, Tuple[Response, in
         flask.Response: JSON with update result.
     """
     try:
-        from shelfmark.core.settings_registry import (
+        from grabarr.vendor.shelfmark.core.settings_registry import (
             get_settings_tab,
             update_settings,
         )
 
         # Ensure settings are registered
-        import shelfmark.config.settings  # noqa: F401
-        import shelfmark.config.security  # noqa: F401
-        import shelfmark.config.users_settings  # noqa: F401
-        import shelfmark.config.notifications_settings  # noqa: F401
+        import grabarr.vendor.shelfmark.config.settings  # noqa: F401
+        import grabarr.vendor.shelfmark.config.security  # noqa: F401
+        import grabarr.vendor.shelfmark.config.users_settings  # noqa: F401
+        import grabarr.vendor.shelfmark.config.notifications_settings  # noqa: F401
 
         tab = get_settings_tab(tab_name)
         if not tab:
@@ -2791,13 +2791,13 @@ def api_settings_execute_action(tab_name: str, action_key: str) -> Union[Respons
         flask.Response: JSON with action result.
     """
     try:
-        from shelfmark.core.settings_registry import execute_action
+        from grabarr.vendor.shelfmark.core.settings_registry import execute_action
 
         # Ensure settings are registered
-        import shelfmark.config.settings  # noqa: F401
-        import shelfmark.config.security  # noqa: F401
-        import shelfmark.config.users_settings  # noqa: F401
-        import shelfmark.config.notifications_settings  # noqa: F401
+        import grabarr.vendor.shelfmark.config.settings  # noqa: F401
+        import grabarr.vendor.shelfmark.config.security  # noqa: F401
+        import grabarr.vendor.shelfmark.config.users_settings  # noqa: F401
+        import grabarr.vendor.shelfmark.config.notifications_settings  # noqa: F401
 
         # Get current form values if provided (for testing with unsaved values)
         current_values = request.get_json(silent=True) or {}
@@ -2828,10 +2828,10 @@ def api_onboarding_get() -> Union[Response, Tuple[Response, int]]:
         flask.Response: JSON with onboarding steps and values.
     """
     try:
-        from shelfmark.core.onboarding import get_onboarding_config
+        from grabarr.vendor.shelfmark.core.onboarding import get_onboarding_config
 
         # Ensure settings are registered
-        import shelfmark.config.settings  # noqa: F401
+        import grabarr.vendor.shelfmark.config.settings  # noqa: F401
 
         config = get_onboarding_config()
         return jsonify(config)
@@ -2853,10 +2853,10 @@ def api_onboarding_save() -> Union[Response, Tuple[Response, int]]:
         flask.Response: JSON with success/error status.
     """
     try:
-        from shelfmark.core.onboarding import save_onboarding_settings
+        from grabarr.vendor.shelfmark.core.onboarding import save_onboarding_settings
 
         # Ensure settings are registered
-        import shelfmark.config.settings  # noqa: F401
+        import grabarr.vendor.shelfmark.config.settings  # noqa: F401
 
         data = request.get_json()
         if not data:
@@ -2883,7 +2883,7 @@ def api_onboarding_skip() -> Union[Response, Tuple[Response, int]]:
         flask.Response: JSON with success status.
     """
     try:
-        from shelfmark.core.onboarding import mark_onboarding_complete
+        from grabarr.vendor.shelfmark.core.onboarding import mark_onboarding_complete
 
         mark_onboarding_complete()
         return jsonify({"success": True, "message": "Onboarding skipped"})

@@ -74,8 +74,8 @@ def _derive_output_mode(task: DownloadTask) -> str:
         return mode
 
     # Legacy / defensive fallback: derive from current config.
-    from shelfmark.core.config import config
-    from shelfmark.core.utils import is_audiobook as check_audiobook
+    from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy as config
+    from grabarr.vendor.shelfmark.core.utils import is_audiobook as check_audiobook
 
     if check_audiobook(getattr(task, "content_type", None)):
         return "folder"

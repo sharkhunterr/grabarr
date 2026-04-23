@@ -47,12 +47,12 @@ def _build_processing_plan(
     task: DownloadTask,
     status_callback,
 ) -> Optional[_ProcessingPlan]:
-    from shelfmark.download.postprocess.pipeline import (
+    from grabarr.vendor.shelfmark.download.postprocess.pipeline import (
         build_output_plan,
         get_final_destination,
         validate_destination,
     )
-    from shelfmark.download.postprocess.policy import get_file_organization
+    from grabarr.vendor.shelfmark.download.postprocess.policy import get_file_organization
 
     is_audiobook = check_audiobook(task.content_type)
     organization_mode = get_file_organization(is_audiobook)
@@ -94,7 +94,7 @@ def process_folder_output(
     preserve_source_on_failure: bool = False,
 ) -> Optional[str]:
     """Post-process download to the configured folder destination."""
-    from shelfmark.download.postprocess.pipeline import (
+    from grabarr.vendor.shelfmark.download.postprocess.pipeline import (
         CustomScriptContext,
         CustomScriptTransferSummary,
         cleanup_output_staging,

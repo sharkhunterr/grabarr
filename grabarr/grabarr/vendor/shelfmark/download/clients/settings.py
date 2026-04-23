@@ -51,8 +51,7 @@ def _transmission_session_verify_override(url: str):
 
 def _test_qbittorrent_connection(current_values: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Test the qBittorrent connection using current form values."""
-    from shelfmark.core.config import config
-
+    from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy as config
     current_values = current_values or {}
 
     raw_url = current_values.get("QBITTORRENT_URL") or config.get("QBITTORRENT_URL", "")
@@ -81,8 +80,8 @@ def _test_qbittorrent_connection(current_values: Optional[Dict[str, Any]] = None
 
 def _test_transmission_connection(current_values: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Test the Transmission connection using current form values."""
-    from shelfmark.core.config import config
-    from shelfmark.download.clients.torrent_utils import (
+    from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy as config
+    from grabarr.vendor.shelfmark.download.clients.torrent_utils import (
         parse_transmission_url,
     )
 
@@ -147,8 +146,7 @@ def _test_deluge_connection(current_values: Optional[Dict[str, Any]] = None) -> 
     from urllib.parse import urlparse
 
     import requests
-    from shelfmark.core.config import config
-
+    from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy as config
     current_values = current_values or {}
 
     raw_host = current_values.get("DELUGE_HOST") or config.get("DELUGE_HOST", "localhost")
@@ -254,7 +252,7 @@ def _test_deluge_connection(current_values: Optional[Dict[str, Any]] = None) -> 
 
 def _test_rtorrent_connection(current_values: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Test the rTorrent connection using current form values."""
-    from shelfmark.core.config import config
+    from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy as config
     import ssl
     from urllib.parse import urlparse
 
@@ -301,8 +299,7 @@ def _test_rtorrent_connection(current_values: Optional[Dict[str, Any]] = None) -
 def _test_nzbget_connection(current_values: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Test the NZBGet connection using current form values."""
     import requests
-    from shelfmark.core.config import config
-
+    from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy as config
     current_values = current_values or {}
 
     raw_url = current_values.get("NZBGET_URL") or config.get("NZBGET_URL", "")
@@ -337,8 +334,7 @@ def _test_nzbget_connection(current_values: Optional[Dict[str, Any]] = None) -> 
 def _test_sabnzbd_connection(current_values: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Test the SABnzbd connection using current form values."""
     import requests
-    from shelfmark.core.config import config
-
+    from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy as config
     current_values = current_values or {}
 
     raw_url = current_values.get("SABNZBD_URL") or config.get("SABNZBD_URL", "")

@@ -341,7 +341,7 @@ def register_admin_routes(app: Flask, user_db: UserDB) -> None:
             user_db.set_user_settings(user_id, validated_settings)
             # Ensure runtime reads see updated per-user overrides immediately.
             try:
-                from shelfmark.core.config import config as app_config
+                from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy as app_config
                 app_config.refresh(force=True)
             except Exception:
                 pass

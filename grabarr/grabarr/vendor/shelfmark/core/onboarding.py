@@ -31,13 +31,13 @@ ONBOARDING_STORAGE_KEY = "onboarding_complete"
 
 def _get_config_dir() -> Path:
     """Get the config directory path."""
-    from shelfmark.config.env import CONFIG_DIR
+    from grabarr.vendor.shelfmark.config.env import CONFIG_DIR
     return Path(CONFIG_DIR)
 
 
 def is_onboarding_complete() -> bool:
     """Check if onboarding has been completed."""
-    from shelfmark.config.env import ONBOARDING
+    from grabarr.vendor.shelfmark.config.env import ONBOARDING
 
     # If onboarding is disabled via env var, treat as complete
     if not ONBOARDING:
@@ -426,7 +426,7 @@ def save_onboarding_settings(values: Dict[str, Any]) -> Dict[str, Any]:
 
         # Refresh config
         try:
-            from shelfmark.core.config import config
+            from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy as config
             config.refresh()
         except ImportError as e:
             logger.debug(f"Could not refresh config after onboarding: {e}")

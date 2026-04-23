@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import List, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from shelfmark.core.search_plan import ReleaseSearchPlan
+    from grabarr.vendor.shelfmark.core.search_plan import ReleaseSearchPlan
 
 from grabarr.vendor.shelfmark.api.websocket import ws_manager
 from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy as config

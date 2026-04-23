@@ -341,7 +341,7 @@ def list_registered_settings() -> List[str]:
 
 def _get_config_dir() -> Path:
     """Get the config directory path."""
-    from shelfmark.config.env import CONFIG_DIR
+    from grabarr.vendor.shelfmark.config.env import CONFIG_DIR
     return Path(CONFIG_DIR)
 
 
@@ -505,8 +505,8 @@ def migrate_mirror_settings() -> None:
     """
     import hashlib
 
-    from shelfmark.core.mirrors import DEFAULT_AA_MIRRORS
-    from shelfmark.core.utils import normalize_http_url
+    from grabarr.vendor.shelfmark.core.mirrors import DEFAULT_AA_MIRRORS
+    from grabarr.vendor.shelfmark.core.utils import normalize_http_url
 
     def _normalize_list(values: list[str]) -> list[str]:
         out: list[str] = []
@@ -1059,7 +1059,7 @@ def _sync_metadata_provider_selection() -> None:
     the first enabled provider if the current selection is invalid.
     """
     try:
-        from shelfmark.metadata_providers import sync_metadata_provider_selection
+        from grabarr.vendor.shelfmark.metadata_providers import sync_metadata_provider_selection
         sync_metadata_provider_selection()
     except ImportError:
         pass  # Metadata providers module not available
@@ -1073,7 +1073,7 @@ def _apply_dns_settings(config) -> None:
     a container restart.
     """
     try:
-        from shelfmark.download import network
+        from grabarr.vendor.shelfmark.download import network
 
         provider = config.get("CUSTOM_DNS", "auto")
         use_doh = config.get("USE_DOH", False)
@@ -1099,7 +1099,7 @@ def _apply_aa_mirror_settings(config) -> None:
     without requiring a container restart.
     """
     try:
-        from shelfmark.download import network
+        from grabarr.vendor.shelfmark.download import network
 
         # Reload AA mirror list and configured base URL from refreshed config.
         network.init_aa(force=True)
@@ -1180,8 +1180,7 @@ def update_settings(tab_name: str, values: Dict[str, Any]) -> Dict[str, Any]:
         # Refresh the config singleton so live settings take effect immediately
         config_obj = None
         try:
-            from shelfmark.core.config import config as config_obj
-
+            from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy as config_obj
             config_obj.refresh()
         except ImportError:
             config_obj = None  # Config module not yet available during initial setup
@@ -1202,7 +1201,7 @@ def update_settings(tab_name: str, values: Dict[str, Any]) -> Dict[str, Any]:
             and "CERTIFICATE_VALIDATION" in values_to_save
         ):
             try:
-                from shelfmark.download.network import _apply_ssl_warning_suppression
+                from grabarr.vendor.shelfmark.download.network import _apply_ssl_warning_suppression
                 _apply_ssl_warning_suppression()
             except Exception as e:
                 logger.warning(f"Failed to apply certificate validation setting: {e}")

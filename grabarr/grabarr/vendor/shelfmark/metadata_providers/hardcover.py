@@ -2596,8 +2596,7 @@ class HardcoverProvider(MetadataProvider):
 
 def _test_hardcover_connection(current_values: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Test the Hardcover API connection using current form values."""
-    from shelfmark.core.config import config as app_config
-
+    from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy as app_config
     current_values = current_values or {}
 
     # Use current form values first, fall back to saved config
@@ -2646,7 +2645,7 @@ def _test_hardcover_connection(current_values: Optional[Dict[str, Any]] = None) 
 
 def _save_connected_user(user_id: Optional[str], username: Optional[str]) -> None:
     """Save or clear connected user metadata in config."""
-    from shelfmark.core.settings_registry import save_config_file, load_config_file
+    from grabarr.vendor.shelfmark.core.settings_registry import save_config_file, load_config_file
 
     config = load_config_file("hardcover")
     if user_id:
@@ -2664,7 +2663,7 @@ def _save_connected_user(user_id: Optional[str], username: Optional[str]) -> Non
 
 def _get_connected_username() -> Optional[str]:
     """Get the stored connected username."""
-    from shelfmark.core.settings_registry import load_config_file
+    from grabarr.vendor.shelfmark.core.settings_registry import load_config_file
 
     config = load_config_file("hardcover")
     return config.get("_connected_username")
@@ -2672,7 +2671,7 @@ def _get_connected_username() -> Optional[str]:
 
 def _get_connected_user_id() -> Optional[str]:
     """Get the stored connected Hardcover user id."""
-    from shelfmark.core.settings_registry import load_config_file
+    from grabarr.vendor.shelfmark.core.settings_registry import load_config_file
 
     config = load_config_file("hardcover")
     value = config.get("_connected_user_id")

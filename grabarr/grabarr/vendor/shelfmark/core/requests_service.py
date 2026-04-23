@@ -28,7 +28,7 @@ MAX_REQUEST_JSON_BLOB_BYTES = 10 * 1024
 
 
 if TYPE_CHECKING:
-    from shelfmark.core.user_db import UserDB
+    from grabarr.vendor.shelfmark.core.user_db import UserDB
 
 
 class RequestServiceError(ValueError):

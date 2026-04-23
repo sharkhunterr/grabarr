@@ -30,7 +30,7 @@ def _get_internal_bypasser():
     global _internal_bypasser
     if _internal_bypasser is None:
         try:
-            from shelfmark.bypass import internal_bypasser
+            from grabarr.vendor.shelfmark.bypass import internal_bypasser
             _internal_bypasser = internal_bypasser
         except ImportError as e:
             raise RuntimeError(
@@ -46,7 +46,7 @@ def _get_external_bypasser():
     global _external_bypasser
     if _external_bypasser is None:
         try:
-            from shelfmark.bypass import external_bypasser
+            from grabarr.vendor.shelfmark.bypass import external_bypasser
             _external_bypasser = external_bypasser
         except ImportError as e:
             raise RuntimeError(

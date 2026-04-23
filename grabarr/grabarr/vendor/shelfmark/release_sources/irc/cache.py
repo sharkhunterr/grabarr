@@ -94,8 +94,7 @@ def get_cached_results(
         Dict with 'releases' (List[Release]) and 'online_servers' (List[str]),
         or None if not cached or expired
     """
-    from shelfmark.core.config import config
-
+    from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy as config
     if ttl_seconds is None:
         ttl_value = config.get("IRC_CACHE_TTL", DEFAULT_CACHE_TTL)
         # Config values are stored as strings, convert to int
@@ -230,8 +229,7 @@ def cleanup_expired(ttl_seconds: Optional[int] = None) -> int:
     Returns:
         Number of entries removed
     """
-    from shelfmark.core.config import config
-
+    from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy as config
     if ttl_seconds is None:
         ttl_value = config.get("IRC_CACHE_TTL", DEFAULT_CACHE_TTL)
         # Config values are stored as strings, convert to int
@@ -267,8 +265,7 @@ def get_cache_stats() -> Dict[str, Any]:
     Returns:
         Dict with cache stats
     """
-    from shelfmark.core.config import config
-
+    from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy as config
     ttl_value = config.get("IRC_CACHE_TTL", DEFAULT_CACHE_TTL)
     # Config values are stored as strings, convert to int
     ttl_seconds = int(ttl_value) if ttl_value else DEFAULT_CACHE_TTL

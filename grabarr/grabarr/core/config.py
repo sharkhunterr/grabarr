@@ -39,12 +39,17 @@ class LoggingConfig(BaseModel):
 
 
 class ServerConfig(BaseModel):
-    """Server section — boot-time wiring that cannot change at runtime."""
+    """Server section — boot-time wiring that cannot change at runtime.
+
+    Defaults point at paths relative to the process's CWD so local
+    development works without root. Docker deployments override these
+    via ``config.yaml`` or ``GRABARR_SERVER__DATA_DIR`` env var.
+    """
 
     host: str = "0.0.0.0"
     port: int = 8080
-    data_dir: Path = Path("/data")
-    downloads_dir: Path = Path("/downloads")
+    data_dir: Path = Path("data")
+    downloads_dir: Path = Path("downloads")
 
 
 class AnnaArchiveConfig(BaseModel):

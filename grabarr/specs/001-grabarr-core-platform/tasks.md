@@ -49,67 +49,67 @@ Single-project Python layout under the repository root; package is `grabarr/`, t
 
 ### Vendoring (Constitution Articles III, VII, VIII)
 
-- [ ] T010 Create `grabarr/vendor/shelfmark/__init__.py` that eagerly imports `_grabarr_adapter` before anything else so vendored modules can resolve `config` and `setup_logger` at import time.
-- [ ] T011 Create `grabarr/vendor/shelfmark/ATTRIBUTION.md` with the full MIT license text, upstream repository URL (`https://github.com/calibrain/calibre-web-automated-book-downloader`), and a `COMMIT_SHA` placeholder the vendor-refresh script fills in.
-- [ ] T012 Vendor Shelfmark bypass module: copy `shelfmark/bypass/__init__.py`, `external_bypasser.py`, `internal_bypasser.py`, `fingerprint.py` verbatim into `grabarr/vendor/shelfmark/bypass/`, rewrite every `from shelfmark.X` import to `from grabarr.vendor.shelfmark.X`, prepend the mandatory header comment per research R-1.
-- [ ] T013 [P] Vendor Shelfmark core utilities: copy `shelfmark/core/mirrors.py` and `naming.py` into `grabarr/vendor/shelfmark/core/`, apply the same import rewrites + header, plus `core/__init__.py`.
-- [ ] T014 Vendor Shelfmark release source: copy `shelfmark/release_sources/direct_download.py` + `__init__.py` into `grabarr/vendor/shelfmark/release_sources/`, apply import rewrites + header. **Do not modify logic.**
-- [ ] T015 Create `grabarr/vendor/shelfmark/_grabarr_adapter.py` implementing `ShelfmarkConfigProxy` (exposing `.get(key, default)` over Grabarr's pydantic settings) and re-exporting `setup_logger` from `grabarr.core.logging`, per research R-1.
-- [ ] T016 Create `grabarr/cli/vendor_refresh.py` — script that re-pulls Shelfmark `main`, re-copies the eight vendored files, re-applies the import fixups, and updates `ATTRIBUTION.md` with the new commit SHA (documented but optional to run).
+- [X] T010 Create `grabarr/vendor/shelfmark/__init__.py` that eagerly imports `_grabarr_adapter` before anything else so vendored modules can resolve `config` and `setup_logger` at import time.
+- [X] T011 Create `grabarr/vendor/shelfmark/ATTRIBUTION.md` with the full MIT license text, upstream repository URL (`https://github.com/calibrain/calibre-web-automated-book-downloader`), and a `COMMIT_SHA` placeholder the vendor-refresh script fills in.
+- [X] T012 Vendor Shelfmark bypass module: copy `shelfmark/bypass/__init__.py`, `external_bypasser.py`, `internal_bypasser.py`, `fingerprint.py` verbatim into `grabarr/vendor/shelfmark/bypass/`, rewrite every `from shelfmark.X` import to `from grabarr.vendor.shelfmark.X`, prepend the mandatory header comment per research R-1.
+- [X] T013 [P] Vendor Shelfmark core utilities: copy `shelfmark/core/mirrors.py` and `naming.py` into `grabarr/vendor/shelfmark/core/`, apply the same import rewrites + header, plus `core/__init__.py`.
+- [X] T014 Vendor Shelfmark release source: copy `shelfmark/release_sources/direct_download.py` + `__init__.py` into `grabarr/vendor/shelfmark/release_sources/`, apply import rewrites + header. **Do not modify logic.**
+- [X] T015 Create `grabarr/vendor/shelfmark/_grabarr_adapter.py` implementing `ShelfmarkConfigProxy` (exposing `.get(key, default)` over Grabarr's pydantic settings) and re-exporting `setup_logger` from `grabarr.core.logging`, per research R-1.
+- [X] T016 Create `grabarr/cli/vendor_refresh.py` — script that re-pulls Shelfmark `main`, re-copies the eight vendored files, re-applies the import fixups, and updates `ATTRIBUTION.md` with the new commit SHA (documented but optional to run).
 
 ### Core modules
 
-- [ ] T017 [P] Create `grabarr/core/enums.py` with every enum from `data-model.md` §"Enums" (MediaType, DownloadMode, TorrentMode, BypassMode, ProfileMode, DownloadStatus, AdapterHealth, UnhealthyReason, NotificationEvent).
-- [ ] T018 [P] Create `grabarr/core/models.py` with every transient dataclass from `data-model.md` §"Derived / transient objects" (SearchResult, DownloadInfo, HealthStatus, QuotaStatus, ConfigField, ConfigSchema) plus `SearchFilters` and `SourcePriorityEntry`.
-- [ ] T019 [P] Create `grabarr/core/config.py` — a pydantic-settings class that loads `/config.yaml` with `YamlSettingsSource` and environment-variable override support; expose only boot-time/secret settings per research R-8.
-- [ ] T020 [P] Create `grabarr/core/logging.py` — structured logger factory with a `RedactionFilter` covering every known secret key (AA member key, Z-Lib cookies, Apprise URLs, API keys), text + JSON modes, correlation-ID context var, and `setup_logger(name)` for the vendor bridge.
-- [ ] T021 [P] Create `grabarr/core/rate_limit.py` — async token-bucket implementation keyed by `(adapter_id, kind)` with tokens-per-minute config.
-- [ ] T022 [P] Create `grabarr/core/categories.py` — Newznab category table (`NEWZNAB_CATEGORIES: dict[int, str]`) per research R-6, used by caps-response builder.
-- [ ] T023 Create `grabarr/core/registry.py` implementing `register_adapter` decorator and `get_registered_adapters()` function; adapter auto-discovery via `importlib` walking `grabarr.adapters.*` at startup.
-- [ ] T024 Create `grabarr/adapters/base.py` mirroring `contracts/source-adapter.py` exactly — `SourceAdapter` Protocol, all error classes (`AdapterError`, `AdapterConnectivityError`, `AdapterBypassError`, `AdapterAuthError`, `AdapterQuotaError`, `AdapterRateLimitError`, `AdapterServerError`, `AdapterNotFound`), and the `@register_adapter` re-export from `grabarr.core.registry`.
-- [ ] T025 Create `grabarr/adapters/__init__.py` — triggers registry auto-discovery when the package is imported.
+- [X] T017 [P] Create `grabarr/core/enums.py` with every enum from `data-model.md` §"Enums" (MediaType, DownloadMode, TorrentMode, BypassMode, ProfileMode, DownloadStatus, AdapterHealth, UnhealthyReason, NotificationEvent).
+- [X] T018 [P] Create `grabarr/core/models.py` with every transient dataclass from `data-model.md` §"Derived / transient objects" (SearchResult, DownloadInfo, HealthStatus, QuotaStatus, ConfigField, ConfigSchema) plus `SearchFilters` and `SourcePriorityEntry`.
+- [X] T019 [P] Create `grabarr/core/config.py` — a pydantic-settings class that loads `/config.yaml` with `YamlSettingsSource` and environment-variable override support; expose only boot-time/secret settings per research R-8.
+- [X] T020 [P] Create `grabarr/core/logging.py` — structured logger factory with a `RedactionFilter` covering every known secret key (AA member key, Z-Lib cookies, Apprise URLs, API keys), text + JSON modes, correlation-ID context var, and `setup_logger(name)` for the vendor bridge.
+- [X] T021 [P] Create `grabarr/core/rate_limit.py` — async token-bucket implementation keyed by `(adapter_id, kind)` with tokens-per-minute config.
+- [X] T022 [P] Create `grabarr/core/categories.py` — Newznab category table (`NEWZNAB_CATEGORIES: dict[int, str]`) per research R-6, used by caps-response builder.
+- [X] T023 Create `grabarr/core/registry.py` implementing `register_adapter` decorator and `get_registered_adapters()` function; adapter auto-discovery via `importlib` walking `grabarr.adapters.*` at startup.
+- [X] T024 Create `grabarr/adapters/base.py` mirroring `contracts/source-adapter.py` exactly — `SourceAdapter` Protocol, all error classes (`AdapterError`, `AdapterConnectivityError`, `AdapterBypassError`, `AdapterAuthError`, `AdapterQuotaError`, `AdapterRateLimitError`, `AdapterServerError`, `AdapterNotFound`), and the `@register_adapter` re-export from `grabarr.core.registry`.
+- [X] T025 Create `grabarr/adapters/__init__.py` — triggers registry auto-discovery when the package is imported.
 
 ### Database base + migrations
 
-- [ ] T026 [P] Create `grabarr/db/base.py` — `Base = declarative_base()`, UUIDv7 column type, TIMESTAMPTZ helper, `JSON` column alias.
-- [ ] T027 [P] Create `grabarr/db/session.py` — async engine factory, `async_sessionmaker`, `get_session()` FastAPI dependency, `AsyncSession` context manager.
-- [ ] T028 Create `grabarr/db/migrations/env.py` — Alembic async env wiring pointing at `grabarr.db.base:Base.metadata` and every ORM model's module.
-- [ ] T029 Create `grabarr/db/migrations/versions/20260423_1000_initial.py` — first Alembic migration creating every table per `data-model.md` (profiles, settings, downloads, torrents, tracker_peers, bypass_sessions, adapter_health, zlibrary_quota, notifications_log, apprise_urls, webhook_config, search_cache) with all indexes and CHECK constraints listed there.
+- [X] T026 [P] Create `grabarr/db/base.py` — `Base = declarative_base()`, UUIDv7 column type, TIMESTAMPTZ helper, `JSON` column alias.
+- [X] T027 [P] Create `grabarr/db/session.py` — async engine factory, `async_sessionmaker`, `get_session()` FastAPI dependency, `AsyncSession` context manager.
+- [X] T028 Create `grabarr/db/migrations/env.py` — Alembic async env wiring pointing at `grabarr.db.base:Base.metadata` and every ORM model's module.
+- [X] T029 Create `grabarr/db/migrations/versions/20260423_1000_initial.py` — first Alembic migration creating every table per `data-model.md` (profiles, settings, downloads, torrents, tracker_peers, bypass_sessions, adapter_health, zlibrary_quota, notifications_log, apprise_urls, webhook_config, search_cache) with all indexes and CHECK constraints listed there.
 
 ### ORM models (one table per file, all parallel — different files, no interdependency)
 
-- [ ] T030 [P] Create `grabarr/profiles/models.py` — `Profile` ORM class with embedded JSON `sources` and `filters` columns, SQLAlchemy-level validators enforcing `data-model.md` invariants (slug regex, weight bounds, year/size ordering).
-- [ ] T031 [P] Create `grabarr/downloads/models.py` — `Download` ORM class with the full state-machine invariants as SQLAlchemy `CheckConstraint`s.
-- [ ] T032 [P] Create `grabarr/torrents/models.py` — `Torrent` and `TrackerPeer` ORM classes.
-- [ ] T033 [P] Create `grabarr/bypass/models.py` — `BypassSession` ORM class.
-- [ ] T034 [P] Create `grabarr/notifications/models.py` — `AppriseUrl`, `WebhookConfig`, `NotificationLog` ORM classes with `cryptography.fernet` wrapper for URL encryption.
-- [ ] T035 [P] Create `grabarr/core/settings_model.py` — `Settings` KV ORM class with a module-level allowlist of permissible keys.
-- [ ] T036 [P] Create `grabarr/adapters/health_model.py` — `AdapterHealth` ORM class.
-- [ ] T037 [P] Create `grabarr/adapters/zlibrary_quota_model.py` — `ZLibraryQuota` ORM class (singleton-per-day pattern).
-- [ ] T038 [P] Create `grabarr/profiles/search_cache_model.py` — `SearchCache` ORM class.
+- [X] T030 [P] Create `grabarr/profiles/models.py` — `Profile` ORM class with embedded JSON `sources` and `filters` columns, SQLAlchemy-level validators enforcing `data-model.md` invariants (slug regex, weight bounds, year/size ordering).
+- [X] T031 [P] Create `grabarr/downloads/models.py` — `Download` ORM class with the full state-machine invariants as SQLAlchemy `CheckConstraint`s.
+- [X] T032 [P] Create `grabarr/torrents/models.py` — `Torrent` and `TrackerPeer` ORM classes.
+- [X] T033 [P] Create `grabarr/bypass/models.py` — `BypassSession` ORM class.
+- [X] T034 [P] Create `grabarr/notifications/models.py` — `AppriseUrl`, `WebhookConfig`, `NotificationLog` ORM classes with `cryptography.fernet` wrapper for URL encryption.
+- [X] T035 [P] Create `grabarr/core/settings_model.py` — `Settings` KV ORM class with a module-level allowlist of permissible keys.
+- [X] T036 [P] Create `grabarr/adapters/health_model.py` — `AdapterHealth` ORM class.
+- [X] T037 [P] Create `grabarr/adapters/zlibrary_quota_model.py` — `ZLibraryQuota` ORM class (singleton-per-day pattern).
+- [X] T038 [P] Create `grabarr/profiles/search_cache_model.py` — `SearchCache` ORM class.
 
 ### Vendor-compatibility tests (FR-040 — required, gates foundation)
 
-- [ ] T039 [P] Create `tests/vendor_compat/__init__.py` and `tests/vendor_compat/conftest.py` with shared `respx_mock` fixture.
-- [ ] T040 [P] Create `tests/vendor_compat/test_external_bypasser.py` — mock FlareSolverr JSON protocol with respx, verify the vendored client calls `/v1` with `cmd=request.get`, parses the `solution` envelope, handles 4xx/5xx, and fires `AdapterBypassError` on protocol mismatch.
-- [ ] T041 [P] Create `tests/vendor_compat/test_internal_bypasser.py` — import the module, assert `SeleniumBase` import succeeds, skip all browser-launching tests on CI (`pytest.mark.skipif(os.getenv("CI") == "true")`).
-- [ ] T042 [P] Create `tests/vendor_compat/test_fingerprint.py` — run `randomize_screen_size()` 10000× and assert the output distribution matches the documented weight pool within ±2 %.
-- [ ] T043 [P] Create `tests/vendor_compat/test_mirrors.py` — mock DNS + HTTP, verify `AAMirrorSelector.next_mirror_or_rotate_dns()` round-robins correctly and falls back to DNS rotation after a full cycle.
-- [ ] T044 [P] Create `tests/vendor_compat/test_naming.py` — parametrized regression test: every known problematic filename (unicode, slashes, control chars, ridiculously long) round-trips through the sanitizer to a safe output.
-- [ ] T045 [P] Create `tests/vendor_compat/test_direct_download_aa.py` — respx-mocked AA HTML fixtures exercising: fast-path with member key, slow-path with countdown (live wait mocked via `monkeypatch`), failure threshold tripping sub-source skip, dynamic sub-source classification via `_url_source_types`.
-- [ ] T046 [P] Create `tests/vendor_compat/test_direct_download_libgen.py` — mocked LibGen mirror pages, verify multi-strategy URL extraction + fiction/nonfiction/scimag routing.
-- [ ] T047 [P] Create `tests/vendor_compat/test_direct_download_zlib.py` — mocked Z-Library pages including login-page regression fixture (for cookie-expired detection later in US4).
+- [X] T039 [P] Create `tests/vendor_compat/__init__.py` and `tests/vendor_compat/conftest.py` with shared `respx_mock` fixture.
+- [X] T040 [P] Create `tests/vendor_compat/test_external_bypasser.py` — mock FlareSolverr JSON protocol with respx, verify the vendored client calls `/v1` with `cmd=request.get`, parses the `solution` envelope, handles 4xx/5xx, and fires `AdapterBypassError` on protocol mismatch.
+- [X] T041 [P] Create `tests/vendor_compat/test_internal_bypasser.py` — import the module, assert `SeleniumBase` import succeeds, skip all browser-launching tests on CI (`pytest.mark.skipif(os.getenv("CI") == "true")`).
+- [X] T042 [P] Create `tests/vendor_compat/test_fingerprint.py` — run `randomize_screen_size()` 10000× and assert the output distribution matches the documented weight pool within ±2 %.
+- [X] T043 [P] Create `tests/vendor_compat/test_mirrors.py` — mock DNS + HTTP, verify `AAMirrorSelector.next_mirror_or_rotate_dns()` round-robins correctly and falls back to DNS rotation after a full cycle.
+- [X] T044 [P] Create `tests/vendor_compat/test_naming.py` — parametrized regression test: every known problematic filename (unicode, slashes, control chars, ridiculously long) round-trips through the sanitizer to a safe output.
+- [X] T045 [P] Create `tests/vendor_compat/test_direct_download_aa.py` — respx-mocked AA HTML fixtures exercising: fast-path with member key, slow-path with countdown (live wait mocked via `monkeypatch`), failure threshold tripping sub-source skip, dynamic sub-source classification via `_url_source_types`.
+- [X] T046 [P] Create `tests/vendor_compat/test_direct_download_libgen.py` — mocked LibGen mirror pages, verify multi-strategy URL extraction + fiction/nonfiction/scimag routing.
+- [X] T047 [P] Create `tests/vendor_compat/test_direct_download_zlib.py` — mocked Z-Library pages including login-page regression fixture (for cookie-expired detection later in US4).
 
 ### FastAPI skeleton
 
-- [ ] T048 Create `grabarr/api/app.py` — FastAPI factory, `lifespan` context manager running: (1) Alembic migrations, (2) seed defaults if empty, (3) libtorrent session restore, (4) register bypass cache sweepers; shutdown: (1) libtorrent session save, (2) stop schedulers.
-- [ ] T049 Create `grabarr/api/health.py` — minimal `/healthz` returning `{"status": "ok"}` (expanded in US4 to list per-subsystem).
-- [ ] T050 Create `grabarr/cli/main.py` — module-level `app` object + `main()` entry that runs first-run setup (generate `config.yaml` from `config.example.yaml` if missing, apply migrations, seed defaults, start uvicorn).
+- [X] T048 Create `grabarr/api/app.py` — FastAPI factory, `lifespan` context manager running: (1) Alembic migrations, (2) seed defaults if empty, (3) libtorrent session restore, (4) register bypass cache sweepers; shutdown: (1) libtorrent session save, (2) stop schedulers.
+- [X] T049 Create `grabarr/api/health.py` — minimal `/healthz` returning `{"status": "ok"}` (expanded in US4 to list per-subsystem).
+- [X] T050 Create `grabarr/cli/main.py` — module-level `app` object + `main()` entry that runs first-run setup (generate `config.yaml` from `config.example.yaml` if missing, apply migrations, seed defaults, start uvicorn).
 
 ### Default-profile seeding
 
-- [ ] T051 Create `grabarr/profiles/defaults.py` — definitions of all seven default profiles per `spec.md` §FR-012 (slug, name, sources, weights, filters, mode, Newznab categories).
-- [ ] T052 Create `grabarr/cli/seed_defaults.py` — idempotent seeder that inserts rows missing from `profiles` table and leaves existing rows untouched.
+- [X] T051 Create `grabarr/profiles/defaults.py` — definitions of all seven default profiles per `spec.md` §FR-012 (slug, name, sources, weights, filters, mode, Newznab categories).
+- [X] T052 Create `grabarr/cli/seed_defaults.py` — idempotent seeder that inserts rows missing from `profiles` table and leaves existing rows untouched.
 
 **Checkpoint**: Foundation is green. `uv run pytest tests/vendor_compat` passes at 100 %. `uv run uvicorn grabarr.api.app:app` boots and serves `/healthz` returning `{"status": "ok"}`.
 

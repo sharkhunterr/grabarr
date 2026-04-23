@@ -194,7 +194,7 @@ class ExternalClientHandler(DownloadHandler, ABC):
             logger.debug(f"No download path available for {client.name} {download_id}")
             return
 
-        from shelfmark.core.path_mappings import (
+        from grabarr.vendor.shelfmark.core.path_mappings import (
             get_client_host_identifier,
             parse_remote_path_mappings,
             remap_remote_to_local_with_match,
@@ -314,7 +314,7 @@ class ExternalClientHandler(DownloadHandler, ABC):
                 logger.debug(f"Download client returned empty path for {client.name} {download_id}")
             return None, message
 
-        from shelfmark.core.path_mappings import (
+        from grabarr.vendor.shelfmark.core.path_mappings import (
             get_client_host_identifier,
             parse_remote_path_mappings,
             remap_remote_to_local_with_match,

@@ -11,7 +11,7 @@ from threading import Event
 from typing import List, Optional, Dict, Type, Callable, Literal, Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from shelfmark.core.search_plan import ReleaseSearchPlan
+    from grabarr.vendor.shelfmark.core.search_plan import ReleaseSearchPlan
 
 from grabarr.vendor.shelfmark.core.models import DownloadTask
 from grabarr.vendor.shelfmark.metadata_providers import BookMetadata

@@ -11,7 +11,7 @@ from typing import Any, Dict
 
 def _on_save_advanced(values: Dict[str, Any]) -> Dict[str, Any]:
     """Validate advanced settings before persisting."""
-    from shelfmark.core.logger import setup_logger
+    from grabarr.core.logging import setup_logger
 
     logger = setup_logger(__name__)
 
@@ -108,7 +108,7 @@ RECORDING_DIR = env.LOG_DIR / "recording"
 
 def _log_external_bypasser_warning() -> None:
     """Log warning about external bypasser DNS limitations (called after config is available)."""
-    from shelfmark.core.config import config
+    from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy as config
     if config.get("USING_EXTERNAL_BYPASSER", False) and config.get("USE_CF_BYPASS", True):
         logger.warning(
             "Using external bypasser (FlareSolverr). Note: FlareSolverr uses its own DNS resolution, "
@@ -208,7 +208,7 @@ _DOWNLOAD_TO_BROWSER_CONTENT_TYPE_VALUES = {
 
 def _get_metadata_provider_options():
     """Build metadata provider options dynamically from enabled providers only."""
-    from shelfmark.metadata_providers import list_providers, is_provider_enabled
+    from grabarr.vendor.shelfmark.metadata_providers import list_providers, is_provider_enabled
 
     options = []
     for provider in list_providers():
@@ -232,7 +232,7 @@ def _get_metadata_provider_options_with_none():
 
 def _get_release_source_options_for_content_type(content_type: str):
     """Build release source options dynamically for a specific content type."""
-    from shelfmark.release_sources import list_available_sources
+    from grabarr.vendor.shelfmark.release_sources import list_available_sources
 
     return [
         {"value": source["name"], "label": source["display_name"]}
@@ -259,9 +259,9 @@ _LANGUAGE_OPTIONS = [{"value": lang["code"], "label": lang["language"]} for lang
 
 def _get_aa_base_url_options():
     """Build AA URL options dynamically, including additional mirrors from config."""
-    from shelfmark.core.mirrors import DEFAULT_AA_MIRRORS, get_aa_mirrors
-    from shelfmark.core.config import config
-    from shelfmark.core.utils import normalize_http_url
+    from grabarr.vendor.shelfmark.core.mirrors import DEFAULT_AA_MIRRORS, get_aa_mirrors
+    from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy as config
+    from grabarr.vendor.shelfmark.core.utils import normalize_http_url
 
     options = [{"value": "auto", "label": "Auto (Recommended)"}]
 
@@ -291,9 +291,8 @@ def _get_aa_base_url_options():
 
 def _get_zlib_mirror_options():
     """Build Z-Library mirror options for SelectField."""
-    from shelfmark.core.mirrors import DEFAULT_ZLIB_MIRRORS
-    from shelfmark.core.config import config
-
+    from grabarr.vendor.shelfmark.core.mirrors import DEFAULT_ZLIB_MIRRORS
+    from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy as config
     options = []
 
     # Add default mirrors
@@ -315,9 +314,8 @@ def _get_zlib_mirror_options():
 
 def _get_welib_mirror_options():
     """Build Welib mirror options for SelectField."""
-    from shelfmark.core.mirrors import DEFAULT_WELIB_MIRRORS
-    from shelfmark.core.config import config
-
+    from grabarr.vendor.shelfmark.core.mirrors import DEFAULT_WELIB_MIRRORS
+    from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy as config
     options = []
 
     # Add default mirrors
@@ -340,7 +338,7 @@ def _get_welib_mirror_options():
 def _clear_covers_cache(current_values: dict) -> dict:
     """Clear the cover image cache."""
     try:
-        from shelfmark.core.image_cache import get_image_cache, reset_image_cache
+        from grabarr.vendor.shelfmark.core.image_cache import get_image_cache, reset_image_cache
 
         cache = get_image_cache()
         count = cache.clear()
@@ -363,7 +361,7 @@ def _clear_covers_cache(current_values: dict) -> dict:
 def _clear_metadata_cache(current_values: dict) -> dict:
     """Clear the in-memory metadata cache."""
     try:
-        from shelfmark.core.cache import get_metadata_cache
+        from grabarr.vendor.shelfmark.core.cache import get_metadata_cache
 
         cache = get_metadata_cache()
         stats_before = cache.stats()
@@ -1244,8 +1242,7 @@ register_on_save("downloads", _on_save_downloads)
 
 def _get_fast_source_options():
     """Fast download sources - configurable list shown in settings."""
-    from shelfmark.core.config import config
-
+    from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy as config
     has_donator_key = bool(config.get("AA_DONATOR_KEY", ""))
 
     return [
@@ -1276,8 +1273,7 @@ def _get_fast_source_defaults():
 
 def _get_slow_source_options():
     """Slow download sources - configurable order. All require bypasser."""
-    from shelfmark.core.config import config
-
+    from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy as config
     bypass_enabled = config.get("USE_CF_BYPASS", True)
     locked = not bypass_enabled
     disabled_reason = "Requires Cloudflare bypass" if locked else None
@@ -1316,7 +1312,7 @@ def _get_slow_source_options():
 
 def _get_slow_source_defaults():
     """Default source priority order for slow sources."""
-    from shelfmark.config.env import _LEGACY_ALLOW_USE_WELIB
+    from grabarr.vendor.shelfmark.config.env import _LEGACY_ALLOW_USE_WELIB
 
     return [
         {"id": "aa-slow-nowait", "enabled": True},
@@ -1482,9 +1478,9 @@ def cloudflare_bypass_settings():
 
 def _on_save_mirrors(values: Dict[str, Any]) -> Dict[str, Any]:
     """Normalize mirror list settings before persisting."""
-    from shelfmark.core.logger import setup_logger
-    from shelfmark.core.mirrors import DEFAULT_AA_MIRRORS
-    from shelfmark.core.utils import normalize_http_url
+    from grabarr.core.logging import setup_logger
+    from grabarr.vendor.shelfmark.core.mirrors import DEFAULT_AA_MIRRORS
+    from grabarr.vendor.shelfmark.core.utils import normalize_http_url
 
     logger = setup_logger(__name__)
 
@@ -1522,7 +1518,7 @@ register_on_save("mirrors", _on_save_mirrors)
 @register_settings("mirrors", "Mirrors", icon="globe", order=23, group="direct_download")
 def mirror_settings():
     """Configure download source mirrors."""
-    from shelfmark.core.mirrors import DEFAULT_AA_MIRRORS, DEFAULT_ZLIB_MIRRORS, DEFAULT_WELIB_MIRRORS
+    from grabarr.vendor.shelfmark.core.mirrors import DEFAULT_AA_MIRRORS, DEFAULT_ZLIB_MIRRORS, DEFAULT_WELIB_MIRRORS
 
     return [
         # === PRIMARY SOURCE ===

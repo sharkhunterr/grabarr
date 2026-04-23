@@ -26,7 +26,7 @@ def _run_io(func, *args, **kwargs):
     so we only import `run_blocking_io` lazily at call-time.
     """
     try:
-        from shelfmark.download.fs import run_blocking_io as _run_blocking_io
+        from grabarr.vendor.shelfmark.download.fs import run_blocking_io as _run_blocking_io
     except Exception:
         return func(*args, **kwargs)
 

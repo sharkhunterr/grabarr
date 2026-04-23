@@ -37,7 +37,7 @@ def _auth_field(factory: Callable[..., Any], auth_method: str, **kwargs: Any) ->
 
 
 def _migrate_security_settings() -> None:
-    from shelfmark.core.settings_registry import (
+    from grabarr.vendor.shelfmark.core.settings_registry import (
         _get_config_file_path,
         _ensure_config_dir,
         save_config_file,
@@ -70,7 +70,7 @@ def _test_oidc_connection(current_values: Dict[str, Any] = None) -> Dict[str, An
 @register_settings("security", "Security", icon="shield", order=5)
 def security_settings():
     """Security and authentication settings."""
-    from shelfmark.config.env import CWA_DB_PATH
+    from grabarr.vendor.shelfmark.config.env import CWA_DB_PATH
 
     cwa_db_available = CWA_DB_PATH is not None and CWA_DB_PATH.exists()
 

@@ -141,8 +141,7 @@ def cacheable(
         @wraps(func)
         def wrapper(*args, **kwargs) -> T:
             # Check if metadata caching is enabled
-            from shelfmark.core.config import config
-
+            from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy as config
             if not config.get("METADATA_CACHE_ENABLED", True):
                 # Caching disabled, execute function directly
                 return func(*args, **kwargs)

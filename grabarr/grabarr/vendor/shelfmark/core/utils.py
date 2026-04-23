@@ -170,7 +170,7 @@ def _resolve_destination_username(
         return ""
 
     try:
-        from shelfmark.core.user_db import UserDB
+        from grabarr.vendor.shelfmark.core.user_db import UserDB
 
         user_db = UserDB(os.path.join(os.environ.get("CONFIG_DIR", "/config"), "users.db"))
         user_db.initialize()
@@ -206,8 +206,7 @@ def get_destination(
     username: Optional[str] = None,
 ) -> Path:
     """Get base destination directory. Audiobooks fall back to main destination."""
-    from shelfmark.core.config import config
-
+    from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy as config
     if is_audiobook:
         # Audiobook destination with fallback to main destination
         audiobook_dest = config.get("DESTINATION_AUDIOBOOK", "", user_id=user_id)
@@ -234,8 +233,7 @@ def get_destination(
 
 def get_aa_content_type_dir(content_type: Optional[str] = None) -> Optional[Path]:
     """Get override directory for AA content-type routing if configured."""
-    from shelfmark.core.config import config
-
+    from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy as config
     # Check if content-type routing is enabled (new or legacy setting)
     if not config.get("AA_CONTENT_TYPE_ROUTING", False) and not config.get("USE_CONTENT_TYPE_DIRECTORIES", False):
         return None
@@ -258,8 +256,7 @@ def get_aa_content_type_dir(content_type: Optional[str] = None) -> Optional[Path
 
 def get_ingest_dir(content_type: Optional[str] = None) -> Path:
     """DEPRECATED: Use get_destination() and get_aa_content_type_dir() instead."""
-    from shelfmark.core.config import config
-
+    from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy as config
     # Check new DESTINATION setting first, then legacy INGEST_DIR
     default_ingest_dir = Path(config.get("DESTINATION", "") or config.get("INGEST_DIR", "/books"))
 
@@ -284,12 +281,11 @@ def transform_cover_url(cover_url: Optional[str], cache_id: str) -> Optional[str
         return cover_url
 
     # Check if cover caching is enabled
-    from shelfmark.config.env import is_covers_cache_enabled
+    from grabarr.vendor.shelfmark.config.env import is_covers_cache_enabled
     if not is_covers_cache_enabled():
         return cover_url
 
-    from shelfmark.core.config import config as app_config
-
+    from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy as app_config
     # Encode the original URL and create a proxy URL
     encoded_url = base64.urlsafe_b64encode(cover_url.encode()).decode()
     base_path = normalize_base_path(app_config.get("URL_BASE", ""))

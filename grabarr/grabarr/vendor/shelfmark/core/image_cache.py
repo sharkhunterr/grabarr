@@ -581,8 +581,8 @@ def get_image_cache() -> ImageCacheService:
     if _instance is None:
         with _instance_lock:
             if _instance is None:
-                from shelfmark.core.config import config
-                from shelfmark.config.env import CONFIG_DIR
+                from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy as config
+                from grabarr.vendor.shelfmark.config.env import CONFIG_DIR
 
                 cache_dir = CONFIG_DIR / "covers"
                 max_size_mb = config.get("COVERS_CACHE_MAX_SIZE_MB", 500)

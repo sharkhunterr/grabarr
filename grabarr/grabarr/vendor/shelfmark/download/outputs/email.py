@@ -273,7 +273,7 @@ def _post_process_email(
     status_callback,
     preserve_source_on_failure: bool = False,
 ) -> Optional[str]:
-    from shelfmark.download.postprocess.pipeline import (
+    from grabarr.vendor.shelfmark.download.postprocess.pipeline import (
         CustomScriptContext,
         OutputPlan,
         cleanup_output_staging,

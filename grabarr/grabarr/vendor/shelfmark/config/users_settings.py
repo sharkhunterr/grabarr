@@ -109,7 +109,7 @@ _USERS_HEADING_DESCRIPTION_BY_AUTH_MODE = {
 
 def _get_request_source_options():
     """Build request-policy source options from registered release sources."""
-    from shelfmark.release_sources import list_available_sources
+    from grabarr.vendor.shelfmark.release_sources import list_available_sources
 
     options = []
     for source in list_available_sources():
@@ -124,7 +124,7 @@ def _get_request_source_options():
 
 def _get_valid_release_source_names_for_content_type(content_type: str) -> set[str]:
     """Return registered release source names that support the requested content type."""
-    from shelfmark.release_sources import list_available_sources
+    from grabarr.vendor.shelfmark.release_sources import list_available_sources
 
     valid_sources: set[str] = set()
     for source in list_available_sources():
@@ -197,7 +197,7 @@ def validate_search_preference_value(key: str, value: Any) -> tuple[Any, str | N
     if key in _SEARCH_PREFERENCE_PROVIDER_KEYS:
         if normalized_value == "":
             return "", None
-        from shelfmark.metadata_providers import is_provider_registered
+        from grabarr.vendor.shelfmark.metadata_providers import is_provider_registered
 
         if not is_provider_registered(normalized_value):
             return (

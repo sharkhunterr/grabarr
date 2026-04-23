@@ -166,7 +166,7 @@ def _source_results_are_releases(source: str) -> bool:
     normalized_source = normalize_source(source)
     if normalized_source in {"", "*"}:
         return False
-    from shelfmark.release_sources import source_results_are_releases
+    from grabarr.vendor.shelfmark.release_sources import source_results_are_releases
     return source_results_are_releases(normalized_source)
 
 
@@ -488,7 +488,7 @@ def register_request_routes(
         default_audio_mode = parse_policy_mode(effective.get("REQUEST_POLICY_DEFAULT_AUDIOBOOK"))
 
         source_capabilities = get_source_content_type_capabilities()
-        from shelfmark.release_sources import source_results_are_releases
+        from grabarr.vendor.shelfmark.release_sources import source_results_are_releases
         source_modes = []
         for source_name in sorted(source_capabilities):
             supported_types = sorted(

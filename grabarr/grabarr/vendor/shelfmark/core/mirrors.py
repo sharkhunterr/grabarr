@@ -15,7 +15,7 @@ def _get_config():
     """Lazy import of config module to avoid circular imports."""
     global _config_module
     if _config_module is None:
-        from shelfmark.core.config import config
+        from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy as config
         _config_module = config
     return _config_module
 

@@ -17,7 +17,7 @@ from grabarr.vendor.shelfmark.core.utils import normalize_http_url
 from grabarr.vendor.shelfmark.download.network import get_ssl_verify
 
 if TYPE_CHECKING:
-    from shelfmark.download import network
+    from grabarr.vendor.shelfmark.download import network
 
 logger = setup_logger(__name__)
 
@@ -106,7 +106,7 @@ def get_bypassed_page(
     cancel_flag: Optional[Event] = None
 ) -> Optional[str]:
     """Fetch HTML via external bypasser with retries and mirror rotation."""
-    from shelfmark.download import network as network_module
+    from grabarr.vendor.shelfmark.download import network as network_module
 
     sel = selector or network_module.AAMirrorSelector()
 

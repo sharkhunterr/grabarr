@@ -11,11 +11,11 @@ from grabarr.vendor.shelfmark.core.user_db import UserDB
 
 def get_settings_registry():
     # Ensure settings modules are loaded before reading registry metadata.
-    import shelfmark.config.settings  # noqa: F401
-    import shelfmark.config.security  # noqa: F401
-    import shelfmark.config.notifications_settings  # noqa: F401
-    import shelfmark.config.users_settings  # noqa: F401
-    from shelfmark.core import settings_registry
+    import grabarr.vendor.shelfmark.config.settings  # noqa: F401
+    import grabarr.vendor.shelfmark.config.security  # noqa: F401
+    import grabarr.vendor.shelfmark.config.notifications_settings  # noqa: F401
+    import grabarr.vendor.shelfmark.config.users_settings  # noqa: F401
+    from grabarr.vendor.shelfmark.core import settings_registry
 
     return settings_registry
 
@@ -30,8 +30,7 @@ def get_ordered_user_overridable_fields(tab_name: str) -> list[tuple[str, Any]]:
 
 
 def build_user_preferences_payload(user_db: UserDB, user_id: int, tab_name: str) -> dict[str, Any]:
-    from shelfmark.core.config import config as app_config
-
+    from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy as app_config
     settings_registry = get_settings_registry()
     ordered_fields = get_ordered_user_overridable_fields(tab_name)
     if not ordered_fields:

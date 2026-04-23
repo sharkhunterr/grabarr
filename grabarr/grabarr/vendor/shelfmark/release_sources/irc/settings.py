@@ -19,7 +19,7 @@ from grabarr.vendor.shelfmark.core.settings_registry import (
 
 def _clear_irc_cache():
     """Clear all cached IRC search results."""
-    from shelfmark.release_sources.irc.cache import clear_cache, get_cache_stats
+    from grabarr.vendor.shelfmark.release_sources.irc.cache import clear_cache, get_cache_stats
 
     stats = get_cache_stats()
     count = clear_cache()

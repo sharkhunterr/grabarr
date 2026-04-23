@@ -25,7 +25,7 @@ def has_local_password_admin(user_db: Any | None = None) -> bool:
     try:
         db = user_db
         if db is None:
-            from shelfmark.core.user_db import UserDB
+            from grabarr.vendor.shelfmark.core.user_db import UserDB
 
             config_root = os.environ.get("CONFIG_DIR", "/config")
             db = UserDB(os.path.join(config_root, "users.db"))
@@ -80,14 +80,14 @@ def determine_auth_mode(
 
 def _load_security_config() -> dict[str, Any]:
     """Load security settings with environment-backed values applied."""
-    from shelfmark.core.settings_registry import (
+    from grabarr.vendor.shelfmark.core.settings_registry import (
         get_setting_value,
         get_settings_field_map,
         load_config_file,
     )
 
     try:
-        import shelfmark.config.security  # noqa: F401
+        import grabarr.vendor.shelfmark.config.security  # noqa: F401
     except Exception:
         return load_config_file("security")
 

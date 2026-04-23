@@ -8,7 +8,7 @@ import time
 from typing import List, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from shelfmark.core.search_plan import ReleaseSearchPlan
+    from grabarr.vendor.shelfmark.core.search_plan import ReleaseSearchPlan
 
 from grabarr.vendor.shelfmark.core.search_plan import ReleaseSearchVariant
 

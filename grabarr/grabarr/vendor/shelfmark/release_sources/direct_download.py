@@ -70,7 +70,7 @@ _AA_PAGE_SOURCES = frozenset({"aa-slow-nowait", "aa-slow-wait"})
 
 def _get_md5_url_template(source_id: str) -> Optional[str]:
     """Get URL template for MD5-based sources from centralized config."""
-    from shelfmark.core import mirrors
+    from grabarr.vendor.shelfmark.core import mirrors
 
     if source_id == "zlib":
         return mirrors.get_zlib_url_template()
@@ -81,7 +81,7 @@ def _get_md5_url_template(source_id: str) -> Optional[str]:
 
 def _get_libgen_domains() -> List[str]:
     """Get LibGen domains from centralized config."""
-    from shelfmark.core import mirrors
+    from grabarr.vendor.shelfmark.core import mirrors
     return mirrors.get_libgen_mirrors()
 
 _LIBGEN_GET_PATTERNS = [
@@ -673,7 +673,7 @@ def _get_download_urls_from_welib(
     status_callback: Optional[Callable[[str, Optional[str]], None]] = None
 ) -> List[str]:
     """Get download URLs from welib.org (bypasser required)."""
-    from shelfmark.core import mirrors
+    from grabarr.vendor.shelfmark.core import mirrors
 
     if not _is_source_enabled("welib"):
         return []
