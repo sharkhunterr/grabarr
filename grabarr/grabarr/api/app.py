@@ -128,6 +128,17 @@ class _SettingsBackend:
             except Exception:  # noqa: BLE001
                 return default
             return s.sources.anna_archive.member_key or default
+        if key == "AA_BASE_URL":
+            # "auto" means let Shelfmark probe the mirror list; anything
+            # else pins to that host (skips auto-rotation).
+            v = (get_sync("sources.anna_archive.aa_base_url", "auto") or "auto").strip()
+            return v or "auto"
+        if key == "AA_MIRROR_URLS":
+            # Comma-separated list. Empty → Shelfmark uses DEFAULT_AA_MIRRORS.
+            raw = (get_sync("sources.anna_archive.aa_mirror_urls", "") or "").strip()
+            if not raw:
+                return default
+            return [u.strip() for u in raw.split(",") if u.strip()]
         return default
 
 

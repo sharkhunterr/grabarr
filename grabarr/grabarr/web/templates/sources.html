@@ -48,6 +48,30 @@
       </div>
       {% endif %}
 
+      {% if item.id == "anna_archive" and item.runtime %}
+      <div class="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs
+                  dark:border-gray-800 dark:bg-gray-950 space-y-2">
+        <div class="flex items-center justify-between gap-2">
+          <span class="font-semibold text-gray-700 dark:text-gray-200">AA mirror</span>
+          {% if item.runtime.aa_active_base %}
+            <span class="text-gray-500 dark:text-gray-400">active: <code>{{ item.runtime.aa_active_base }}</code></span>
+          {% endif %}
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <select class="flex-1 min-w-[160px] !py-1 !text-xs"
+                  id="aa-mirror-{{ item.id }}"
+                  data-current="{{ item.runtime.aa_base_url }}">
+            <option value="auto" {% if item.runtime.aa_base_url == 'auto' %}selected{% endif %}>auto (probe all)</option>
+            {% for m in item.runtime.aa_known_mirrors %}
+              <option value="{{ m }}" {% if item.runtime.aa_base_url == m %}selected{% endif %}>{{ m }}</option>
+            {% endfor %}
+          </select>
+          <button type="button" class="btn-secondary btn-sm"
+                  onclick="saveAAMirror()">Apply</button>
+        </div>
+      </div>
+      {% endif %}
+
       <div class="mt-auto flex flex-wrap gap-2 pt-4">
         <button type="button" class="btn-primary flex-1 min-w-[120px]"
                 onclick="testSource(this, '{{ item.id }}')">Test now</button>
@@ -74,6 +98,22 @@
 {% block scripts %}
 {% raw %}
 <script>
+  async function saveAAMirror() {
+    const sel = document.getElementById('aa-mirror-anna_archive');
+    if (!sel) return;
+    const value = sel.value;
+    const r = await fetch('/api/sources/anna_archive/mirror', {
+      method: 'PATCH',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({aa_base_url: value}),
+    });
+    if (!r.ok) { toast('Save failed: ' + await r.text(), 'err', 5000); return; }
+    const data = await r.json();
+    const active = data.aa_active_base || '(auto-selected at next request)';
+    toast(`Mirror pinned to ${value === 'auto' ? 'auto' : value} — active: ${active}`, 'ok', 4000);
+    setTimeout(() => window.location.reload(), 800);
+  }
+
   async function testSource(btn, id) {
     btn.disabled = true; const orig = btn.textContent; btn.textContent = 'Testing…';
     const r = await fetch(`/api/sources/${id}/test`, {method: 'POST'});

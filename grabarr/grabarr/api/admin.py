@@ -222,6 +222,34 @@ async def api_list_sources() -> dict:
             except Exception:  # noqa: BLE001
                 quota = None
         h = health_by_id.get(aid)
+        # Per-adapter runtime knobs (mirror, etc.). Keeps the per-source
+        # UI decoupled from the generic settings page.
+        runtime: dict[str, Any] = {}
+        if aid == "anna_archive":
+            from grabarr.core.settings_service import get_sync as _g
+
+            try:
+                from grabarr.vendor.shelfmark.core.mirrors import DEFAULT_AA_MIRRORS
+                from grabarr.vendor.shelfmark.download import network as _net
+
+                active_base = getattr(_net, "_aa_base_url", None)
+                mirrors = list(DEFAULT_AA_MIRRORS)
+            except Exception:  # noqa: BLE001
+                active_base = None
+                mirrors = [
+                    "https://annas-archive.gl",
+                    "https://annas-archive.pk",
+                    "https://annas-archive.vg",
+                    "https://annas-archive.gd",
+                ]
+            override = (_g("sources.anna_archive.aa_mirror_urls", "") or "").strip()
+            if override:
+                mirrors = [u.strip() for u in override.split(",") if u.strip()]
+            runtime = {
+                "aa_base_url": _g("sources.anna_archive.aa_base_url", "auto"),
+                "aa_active_base": active_base,
+                "aa_known_mirrors": mirrors,
+            }
         items.append(
             {
                 "id": aid,
@@ -240,9 +268,45 @@ async def api_list_sources() -> dict:
                 "config_schema": {
                     "fields": [asdict(f) for f in (schema.fields if schema else [])],
                 },
+                "runtime": runtime,
             }
         )
     return {"items": items}
+
+
+@router.patch("/sources/anna_archive/mirror")
+async def api_set_aa_mirror(body: dict[str, Any] = Body(default_factory=dict)) -> dict:
+    """Pin AA to a specific mirror (or "auto") + refresh Shelfmark live.
+
+    Body: ``{"aa_base_url": "https://annas-archive.gl" | "auto",
+             "aa_mirror_urls": "comma,separated" (optional)}``
+    """
+    from grabarr.core.settings_service import update_many
+
+    patch: dict[str, Any] = {}
+    if "aa_base_url" in body:
+        val = (body.get("aa_base_url") or "auto").strip() or "auto"
+        patch["sources.anna_archive.aa_base_url"] = val
+    if "aa_mirror_urls" in body:
+        patch["sources.anna_archive.aa_mirror_urls"] = (body.get("aa_mirror_urls") or "").strip()
+    if not patch:
+        raise HTTPException(status_code=400, detail="no mirror fields in request")
+    await update_many(patch)
+    # Tell Shelfmark to re-read the config + re-select the active mirror
+    # without waiting for a process restart.
+    active_base = None
+    try:
+        from grabarr.vendor.shelfmark.download import network as _net
+
+        _net.init_aa(force=True)
+        active_base = getattr(_net, "_aa_base_url", None)
+    except Exception as exc:  # noqa: BLE001
+        _log.warning("init_aa(force=True) raised: %s", exc)
+    return {
+        "aa_base_url": patch.get("sources.anna_archive.aa_base_url"),
+        "aa_mirror_urls": patch.get("sources.anna_archive.aa_mirror_urls"),
+        "aa_active_base": active_base,
+    }
 
 
 @router.post("/sources/{source_id}/test")

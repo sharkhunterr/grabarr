@@ -40,6 +40,8 @@ _ALLOWED_KEYS: frozenset[str] = frozenset(
         "metadata.ia_contact_email",
         "metadata.user_agent_suffix",
         "notifications.flap_cooldown_minutes",
+        "sources.anna_archive.aa_base_url",
+        "sources.anna_archive.aa_mirror_urls",
     }
 )
 
@@ -68,6 +70,13 @@ _DEFAULTS: dict[str, Any] = {
     "metadata.ia_contact_email": "",
     "metadata.user_agent_suffix": "",
     "notifications.flap_cooldown_minutes": 10,
+    # "auto" = probe each mirror in order and pick the first 200.
+    # Pin to a specific host (e.g. "https://annas-archive.gl") when the
+    # auto-selector keeps picking an unreachable one.
+    "sources.anna_archive.aa_base_url": "auto",
+    # Comma-separated override for the full mirror list. Empty = use
+    # Shelfmark's DEFAULT_AA_MIRRORS.
+    "sources.anna_archive.aa_mirror_urls": "",
 }
 
 
