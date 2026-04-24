@@ -211,6 +211,28 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     await load_settings_cache()
     install_shelfmark_bridge(_SettingsBackend())
 
+    # 5b. Sweep zombie grabs from a previous run. A worker thread that
+    #     was mid-flight during an uvicorn reload / Ctrl-C leaves its
+    #     Download row stuck in resolving / downloading / verifying /
+    #     ready — there's nothing still working on them. Mark them as
+    #     failed so they don't appear as ghost "Active grabs" forever.
+    from sqlalchemy import update as _sa_update
+
+    from grabarr.downloads.models import Download
+
+    _STUCK_STATES = ("resolving", "downloading", "verifying", "ready")
+    async with session_scope() as _sess:
+        _res = await _sess.execute(
+            _sa_update(Download)
+            .where(Download.status.in_(_STUCK_STATES))
+            .values(
+                status="failed",
+                failure_reason="interrupted by server restart; grab was mid-flight",
+            )
+        )
+        if _res.rowcount:
+            _log.info("recovered %d zombie grabs → status=failed", _res.rowcount)
+
     # 6. Start adapter health monitor + cleanup sweeper in the background.
     from grabarr.adapters.health import start_monitor, stop_monitor
     from grabarr.downloads.cleanup import start_sweeper, stop_sweeper
