@@ -70,3 +70,13 @@ pnpm-lock.yaml
 
 # ---- Alembic workaround ---------------------------------------------------
 # Migrations are checked in; only ignore the transient compiled dirs.
+
+# ---- Claude Code workspace state ------------------------------------------
+.claude/
+
+# ---- SeleniumBase / internal bypasser scratch -----------------------------
+# cdp_driver writes a 'downloaded_files' dir next to cwd during bypass runs.
+downloaded_files/
+
+# ---- Runtime pid file written by start.sh ---------------------------------
+.grabarr.pid
