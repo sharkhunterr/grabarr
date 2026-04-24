@@ -201,6 +201,51 @@ def _probe_reachable(url: str, timeout: float = 3.0) -> bool:
         return False
 
 
+class _ShelfmarkSourcePriorityOverride:
+    """Context manager that temporarily narrows Shelfmark's source
+    cascade to AA-only sub-sources.
+
+    Shelfmark's :func:`_download_book` reads ``FAST_SOURCES_DISPLAY`` +
+    ``SOURCE_PRIORITY`` from its config proxy every call. Swapping the
+    values on the proxy's ``_BUILTIN_DEFAULTS`` for the duration of the
+    download scopes the cascade without persisting anything to Grabarr's
+    settings table.
+    """
+
+    _FAST_KEY = "FAST_SOURCES_DISPLAY"
+    _SLOW_KEY = "SOURCE_PRIORITY"
+
+    def __init__(
+        self,
+        proxy: Any,
+        *,
+        fast: list[dict[str, Any]],
+        slow: list[dict[str, Any]],
+    ) -> None:
+        self._proxy = proxy
+        self._fast = fast
+        self._slow = slow
+        self._saved: dict[str, Any] = {}
+
+    def __enter__(self) -> "_ShelfmarkSourcePriorityOverride":
+        defaults = getattr(self._proxy, "_BUILTIN_DEFAULTS", None)
+        if isinstance(defaults, dict):
+            self._saved[self._FAST_KEY] = defaults.get(self._FAST_KEY)
+            self._saved[self._SLOW_KEY] = defaults.get(self._SLOW_KEY)
+            defaults[self._FAST_KEY] = self._fast
+            defaults[self._SLOW_KEY] = self._slow
+        return self
+
+    def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> None:
+        defaults = getattr(self._proxy, "_BUILTIN_DEFAULTS", None)
+        if isinstance(defaults, dict):
+            for k, v in self._saved.items():
+                if v is None:
+                    defaults.pop(k, None)
+                else:
+                    defaults[k] = v
+
+
 def _resolve_aa_candidate(url: str, direct_download: Any, title: str = "") -> str | None:
     """Resolve a single candidate URL from ``BrowseRecord.download_urls``
     to a direct file URL by delegating to Shelfmark's own resolver.
@@ -341,6 +386,7 @@ class AnnaArchiveAdapter:
             _download_book,
             get_book_info,
         )
+        from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy
 
         if not callable(get_book_info):
             raise AdapterError(
@@ -367,7 +413,25 @@ class AnnaArchiveAdapter:
             self.id, external_id, target_path,
         )
 
-        success_url = _download_book(book_info, target_path)
+        # Constrain Shelfmark's cascade to AA-only sub-sources for the
+        # duration of this download. Grabarr's profile-level orchestrator
+        # already owns cross-source ordering (AA → libgen → IA → Z-Lib
+        # each as its own adapter), so letting Shelfmark ALSO cascade
+        # into libgen/welib/zlib wastes time on mirrors Grabarr will
+        # fall through to next anyway. If AA exhausts, the orchestrator
+        # moves to the next adapter per the profile.
+        ctx = _ShelfmarkSourcePriorityOverride(
+            shelfmark_config_proxy,
+            fast=[
+                {"id": "aa-fast", "enabled": True},
+            ],
+            slow=[
+                {"id": "aa-slow-nowait", "enabled": True},
+                {"id": "aa-slow-wait", "enabled": True},
+            ],
+        )
+        with ctx:
+            success_url = _download_book(book_info, target_path)
         if not success_url or not target_path.exists() or target_path.stat().st_size == 0:
             # Clean up the empty scratch dir so we don't leak anything.
             try:
