@@ -1,0 +1,66 @@
+# Grabarr — docker-compose with bundled internal CF bypasser.
+#
+# This compose ships Chromium + Xvfb + seleniumbase inside the grabarr
+# image so bypass.mode=internal works out of the box (no FlareSolverr
+# sidecar required). Starting with this is the most reliable path when
+# the host network poisons mirror DNS or the host lacks Xvfb.
+#
+# Usage:
+#   docker compose up -d --build
+#   docker compose logs -f grabarr
+
+services:
+  grabarr:
+    build: .
+    image: grabarr:1.0.0
+    container_name: grabarr
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+      # libtorrent listen range for active_seed mode.
+      - "45000-45100:45000-45100/tcp"
+      - "45000-45100:45000-45100/udp"
+    volumes:
+      - ./config:/config               # config.yaml (if any)
+      - ./data:/data                   # SQLite + Shelfmark runtime
+      - ./downloads:/downloads         # staging
+    environment:
+      GRABARR_LOG_LEVEL: "INFO"
+      LOG_FORMAT: "text"
+      # Internet Archive contact email (REQUIRED by IA policy)
+      GRABARR_IA_CONTACT_EMAIL: "you@example.com"
+      # libtorrent listen ports (match the ports: mapping above)
+      GRABARR_TORRENT_LISTEN_PORT_MIN: "45000"
+      GRABARR_TORRENT_LISTEN_PORT_MAX: "45100"
+      # Optional: AA donator key (fast aa-fast API, no CF needed)
+      # GRABARR_SOURCES__ANNA_ARCHIVE__MEMBER_KEY: ""
+      # Optional: force a specific DNS for mirror lookups (bypass host
+      # Pi-hole / AdGuard). "auto" = rotate Cloudflare/Google/Quad9/OpenDNS.
+      # GRABARR_SHELFMARK_CUSTOM_DNS: "auto"
+    # Docker's embedded DNS (127.0.0.11) isolates the container from the
+    # host's resolver — but we also pass explicit public DNS as a belt
+    # so mirror lookups never hit a poisoning upstream.
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+
+  # OPTIONAL: FlareSolverr sidecar. Only needed if you prefer
+  # bypass.mode=external over the internal Chromium path. Leave
+  # commented out for the simpler internal-only setup.
+  # flaresolverr:
+  #   image: ghcr.io/flaresolverr/flaresolverr:v3.3.25
+  #   container_name: flaresolverr
+  #   restart: unless-stopped
+  #   environment:
+  #     LOG_LEVEL: "info"
+  #     CAPTCHA_SOLVER: "none"
+  #     TZ: "UTC"
+  #   networks:
+  #     - grabarr_net
+
+# If you enable flaresolverr above, uncomment this bridge network and
+# set grabarr's networks: to [grabarr_net] so the two containers can
+# resolve each other by name.
+# networks:
+#   grabarr_net:
+#     driver: bridge

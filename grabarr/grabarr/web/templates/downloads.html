@@ -98,8 +98,12 @@
           {% elif d.status in ['queued','resolving','downloading','verifying'] %}<span class="badge-warning">{{ d.status }}</span>
           {% else %}<span class="badge-neutral">{{ d.status }}</span>{% endif %}
         </td>
-        <td class="px-4 py-2.5 text-right">
-          <button class="btn-ghost btn-sm text-red-600"
+        <td class="px-4 py-2.5 text-right whitespace-nowrap">
+          {% if d.status == 'failed' %}
+          <button class="btn-ghost btn-sm text-emerald-600" title="Retry"
+                  onclick="event.stopPropagation(); retryDownload('{{ d.id }}')">↻</button>
+          {% endif %}
+          <button class="btn-ghost btn-sm text-red-600" title="Delete"
                   onclick="event.stopPropagation(); deleteDownload('{{ d.id }}')">×</button>
         </td>
       </tr>
@@ -192,6 +196,24 @@
     setTimeout(() => window.location.reload(), 600);
   }
 
+  async function cancelDownload(id) {
+    const r = await fetch(`/api/downloads/${id}/cancel`, {method: 'POST'});
+    if (!r.ok) { toast('Cancel failed: ' + await r.text(), 'err', 5000); return; }
+    const d = await r.json();
+    toast(d.changed ? 'Cancelled' : 'Already terminal', 'ok', 2000);
+    refreshActiveGrabs();
+  }
+
+  async function retryDownload(id) {
+    const r = await fetch(`/api/downloads/${id}/retry`, {method: 'POST'});
+    if (!r.ok) { toast('Retry failed: ' + await r.text(), 'err', 5000); return; }
+    const d = await r.json();
+    // Actually execute the grab by GET'ing the new .torrent
+    toast(`Re-queued as ${d.new_token.slice(0,8)}…`, 'ok', 2000);
+    fetch(d.torrent_url, {method: 'GET'}).catch(() => {});
+    setTimeout(() => window.location.reload(), 1200);
+  }
+
   async function deleteDownload(id) {
     const ok = await confirmModal({
       title: 'Delete this download?',
@@ -269,7 +291,9 @@
           <span class="text-xs font-mono text-gray-500" title="${escHtml(d.started_at || '')}">
             ${timeSince(d.started_at)}
           </span>
-          <button class="btn-ghost btn-sm text-red-600"
+          <button class="btn-ghost btn-sm text-amber-600" title="Cancel"
+                  onclick="cancelDownload('${d.id}')">⏹</button>
+          <button class="btn-ghost btn-sm text-red-600" title="Delete"
                   onclick="deleteDownload('${d.id}')">×</button>
         </div>`).join('');
     } catch (_) { /* ignore transient errors */ }
