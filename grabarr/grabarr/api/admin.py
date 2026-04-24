@@ -546,6 +546,71 @@ async def api_list_downloads(
     }
 
 
+@router.post("/downloads/bulk-delete")
+async def api_bulk_delete_downloads(body: dict[str, Any] = Body(default_factory=dict)) -> dict:
+    """Bulk-delete downloads + their staged files.
+
+    Body (all optional, combinable):
+      - ``status``: one of queued/resolving/downloading/verifying/ready/
+        seeding/completed/failed — delete only rows matching. If omitted,
+        every download row is deleted. Pass ``"all"`` to be explicit.
+      - ``include_torrents``: bool, default True — also drop the matching
+        torrents rows.
+      - ``include_files``: bool, default True — unlink on-disk files.
+
+    Returns ``{"deleted": N, "files_removed": M}``.
+    """
+    import os
+    from pathlib import Path
+    from sqlalchemy import delete as sa_delete, select
+
+    from grabarr.db.session import session_scope
+    from grabarr.downloads.models import Download
+    from grabarr.torrents.models import Torrent
+
+    target_status = body.get("status")
+    if target_status in ("all", "", None):
+        target_status = None
+    elif target_status not in {
+        "queued", "resolving", "downloading", "verifying",
+        "ready", "seeding", "completed", "failed",
+    }:
+        raise HTTPException(status_code=400, detail=f"invalid status: {target_status}")
+
+    include_torrents = bool(body.get("include_torrents", True))
+    include_files = bool(body.get("include_files", True))
+
+    deleted = 0
+    files_removed = 0
+    async with session_scope() as session:
+        q = select(Download)
+        if target_status:
+            q = q.where(Download.status == target_status)
+        rows = (await session.execute(q)).scalars().all()
+        deleted = len(rows)
+        for dl in rows:
+            if include_files and dl.file_path:
+                try:
+                    p = Path(dl.file_path)
+                    if p.exists():
+                        p.unlink(missing_ok=True)
+                        files_removed += 1
+                        # best-effort: remove the empty per-token parent dir
+                        try:
+                            p.parent.rmdir()
+                        except OSError:
+                            pass
+                except OSError:
+                    pass
+            await session.delete(dl)
+        if include_torrents and target_status is None:
+            # Drop any orphan torrent rows (download_id can be NULL after
+            # an older migration bug; belt and braces).
+            await session.execute(sa_delete(Torrent))
+
+    return {"deleted": deleted, "files_removed": files_removed}
+
+
 @router.delete("/downloads/{download_id}", status_code=204)
 async def api_delete_download(download_id: str) -> None:
     from pathlib import Path

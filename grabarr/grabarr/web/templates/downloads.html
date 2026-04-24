@@ -13,7 +13,10 @@
       </label>
     </p>
   </div>
-  <button type="button" class="btn-secondary" onclick="openFilters()">Filters</button>
+  <div class="flex gap-2">
+    <button type="button" class="btn-secondary" onclick="openFilters()">Filters</button>
+    <button type="button" class="btn-ghost text-red-600" onclick="clearAll()">Clear all</button>
+  </div>
 </div>
 
 <!-- Active grabs panel — refreshes every 3 s, shows only non-terminal statuses.
@@ -132,6 +135,27 @@
         { label: 'Close', class: 'btn-primary' },
       ],
     });
+  }
+
+  async function clearAll() {
+    const ok = await confirmModal({
+      title: 'Clear all downloads?',
+      body: `Deletes every row from <code>downloads</code> + <code>torrents</code>,
+             and removes every staged file under <code>downloads/ready</code> and
+             <code>downloads/incoming</code>. Profiles, settings, and API keys are
+             kept. Useful before a clean test run.`,
+      confirmLabel: 'Clear all', danger: true,
+    });
+    if (!ok) return;
+    const r = await fetch('/api/downloads/bulk-delete', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({status: 'all'}),
+    });
+    if (!r.ok) { toast('Clear failed: ' + await r.text(), 'err', 5000); return; }
+    const d = await r.json();
+    toast(`Cleared ${d.deleted} rows (${d.files_removed} files)`, 'ok', 3000);
+    setTimeout(() => window.location.reload(), 600);
   }
 
   async function deleteDownload(id) {
