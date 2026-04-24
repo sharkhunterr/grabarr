@@ -94,7 +94,16 @@ DEFAULT_PROFILES: list[dict[str, Any]] = [
         "sources": [
             _src("internet_archive", 1.0, timeout=90),
         ],
-        "filters": _filters(extra_query_terms="collection:internetarcade"),
+        # internetarcade alone is the Arcade games collection — misses
+        # NES/SNES/Game Boy/MS-DOS titles. Widen to the main ROM
+        # collections so "super mario" etc. actually hit something.
+        "filters": _filters(extra_query_terms=(
+            "(collection:internetarcade "
+            "OR collection:consolelivingroom "
+            "OR collection:nintendoentertainmentsystem "
+            "OR collection:softwarelibrary_msdos_games "
+            "OR collection:gameboy_library)"
+        )),
         "mode": ProfileMode.FIRST_MATCH.value,
         "newznab_categories": [1070],
     },
