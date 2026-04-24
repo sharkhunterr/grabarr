@@ -145,6 +145,23 @@ class _SettingsBackend:
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """Start-up and shutdown wiring."""
+    # 0. Shelfmark's vendored env.py hardcodes /var/log/shelfmark + /config.
+    #    Redirect them into Grabarr's data dir so writes don't need root.
+    #    run.sh exports these; this block is the belt-and-braces for people
+    #    who bypass the launcher (pytest, direct uvicorn, etc.).
+    import os as _os
+    from pathlib import Path as _Path
+
+    _data_root = _Path.cwd() / "data" / "shelfmark"
+    _os.environ.setdefault("LOG_ROOT", str(_data_root / "log_root"))
+    _os.environ.setdefault("CONFIG_DIR", str(_data_root / "config"))
+    _os.environ.setdefault("TMP_DIR", str(_data_root / "tmp"))
+    _os.environ.setdefault("INGEST_DIR", str(_data_root / "ingest"))
+    for _k in ("LOG_ROOT", "CONFIG_DIR", "TMP_DIR", "INGEST_DIR"):
+        _Path(_os.environ[_k]).mkdir(parents=True, exist_ok=True)
+    # Shelfmark appends "/shelfmark" to LOG_ROOT for its own log dir.
+    _Path(_os.environ["LOG_ROOT"], "shelfmark").mkdir(parents=True, exist_ok=True)
+
     # 1. Load settings.
     settings = load_settings()
     # 2. Configure logging with requested level/format + on-disk rotation.
