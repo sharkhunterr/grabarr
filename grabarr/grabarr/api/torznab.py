@@ -141,11 +141,26 @@ def _normalize_language(lang: str | None) -> str | None:
     return key[:2] if len(key) >= 2 else None
 
 
+# Short display labels for the source tag appended to release titles.
+# Using short codes so Readarr/Sonarr release parsers that strip known
+# format tags don't choke on extra-long brackets.
+_SOURCE_LABEL: dict[str, str] = {
+    "anna_archive": "AA",
+    "libgen": "LibGen",
+    "internet_archive": "IA",
+    "zlibrary": "Z-Lib",
+    "welib": "Welib",
+}
+
+
 def _build_release_title(r: Any) -> str:  # noqa: ANN401
     """Scene-style title so Bookshelf / Readarr parsers succeed.
 
-    Format: ``{Author} - {Title} ({year}) [FORMAT]`` with reasonable
-    fallbacks for each missing field.
+    Format: ``{Author} - {Title} ({year}) [FORMAT] [SOURCE]`` with
+    reasonable fallbacks for each missing field. The trailing
+    ``[SOURCE]`` tag lets the operator see at-a-glance which adapter
+    served a given result (AA / LibGen / IA / Z-Lib / Welib) — useful
+    to pick a release less likely to hit CF-bypass-only download paths.
     """
     parts: list[str] = []
     if r.author:
@@ -156,6 +171,8 @@ def _build_release_title(r: Any) -> str:  # noqa: ANN401
         out += f" ({r.year})"
     if r.format and r.format != "?":
         out += f" [{r.format.upper()}]"
+    source_label = _SOURCE_LABEL.get(r.source_id, r.source_id)
+    out += f" [{source_label}]"
     return out
 
 
