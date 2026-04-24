@@ -424,13 +424,30 @@ def _tracker_port() -> int:
     return int(os.environ.get("GRABARR_TRACKER_PORT", "8999"))
 
 
+def _public_base_url(request: Request) -> str:
+    """Return the base URL baked into .torrent files (announce + webseed).
+
+    Torrent clients behind a VPN / in a container network often can't
+    reach the LAN IP the HTTP request came from. The ``server.public_base_url``
+    setting lets the operator pin a URL every client can actually hit.
+    Falls back to the request's own Host header when unset, which is
+    correct for same-LAN clients like Prowlarr on the host.
+    """
+    from grabarr.core.settings_service import get_sync
+
+    override = (get_sync("server.public_base_url", "") or "").strip().rstrip("/")
+    if override:
+        return override
+    return f"{request.url.scheme}://{request.url.netloc}"
+
+
 @router.get("/torznab/{slug}/download/{token_ext}")
 async def torznab_download(slug: str, token_ext: str, request: Request) -> Response:
     """Return the ``.torrent`` blob for ``token_ext`` (``{token}.torrent``)."""
     if not token_ext.endswith(".torrent"):
         raise HTTPException(status_code=404, detail="expected {token}.torrent")
     token = token_ext[: -len(".torrent")]
-    host_base_url = f"{request.url.scheme}://{request.url.netloc}"
+    host_base_url = _public_base_url(request)
     try:
         blob = await prepare_and_generate_torrent(
             slug=slug,

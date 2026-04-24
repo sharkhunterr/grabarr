@@ -144,6 +144,27 @@
 
 <div class="card">
   <div class="card-body space-y-4">
+    <h2 class="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Server</h2>
+    <div>
+      <label class="label" for="s-pub-url">Public base URL</label>
+      <input id="s-pub-url" type="url" name="server.public_base_url" class="w-full font-mono"
+             value="{{ settings['server.public_base_url'] }}"
+             placeholder="(empty — use request Host header)">
+      <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+        URL baked into the <code>.torrent</code>'s announce &amp;
+        <code>url-list</code> (webseed). Required when the torrent
+        client is behind a VPN / in a container network and can't
+        route back to the host's LAN IP. Examples:
+        <code>https://grabarr.my.duckdns.org</code> for public,
+        <code>http://172.17.0.1:8080</code> for same-host Docker.
+        Empty = use the request's own <code>Host</code> header.
+      </p>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body space-y-4">
     <h2 class="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Network</h2>
     <p class="text-xs text-gray-500 dark:text-gray-400">
       Override the system resolver for mirror lookups. Required when a

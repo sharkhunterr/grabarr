@@ -44,6 +44,7 @@ _ALLOWED_KEYS: frozenset[str] = frozenset(
         "sources.anna_archive.aa_mirror_urls",
         "network.use_doh",
         "network.custom_dns",
+        "server.public_base_url",
     }
 )
 
@@ -88,6 +89,11 @@ _DEFAULTS: dict[str, Any] = {
     # mirror lookups. "auto" = rotate through Cloudflare/Google/Quad9.
     # Empty = system resolver. Only applied when use_doh is False.
     "network.custom_dns": "auto",
+    # Public base URL baked into the .torrent's announce + url-list.
+    # Required when the torrent client sits behind a VPN / in a
+    # container network that can't route back to the host's LAN IP.
+    # Empty = use the request's own Host header (fine for same-LAN).
+    "server.public_base_url": "",
 }
 
 
