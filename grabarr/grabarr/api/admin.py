@@ -611,6 +611,90 @@ async def api_bulk_delete_downloads(body: dict[str, Any] = Body(default_factory=
     return {"deleted": deleted, "files_removed": files_removed}
 
 
+@router.post("/downloads/{download_id}/retry")
+async def api_retry_download(download_id: str) -> dict:
+    """Re-queue a failed or cancelled download with a fresh token.
+
+    Looks up the original source_id + external_id + profile, creates
+    a new SearchToken, and returns the torznab URL the *arr client
+    (or you) can GET to actually re-run the grab. The old Download
+    row is left intact for history.
+    """
+    import secrets
+    from sqlalchemy import select
+
+    from grabarr.db.session import session_scope
+    from grabarr.downloads.models import Download
+    from grabarr.downloads.search_tokens import SearchToken
+    from grabarr.profiles.models import Profile
+
+    async with session_scope() as session:
+        row = await session.execute(select(Download).where(Download.id == download_id))
+        dl = row.scalar_one_or_none()
+        if dl is None:
+            raise HTTPException(status_code=404, detail="download not found")
+        prof = await session.execute(
+            select(Profile).where(Profile.id == dl.profile_id)
+        )
+        profile = prof.scalar_one_or_none()
+        if profile is None:
+            raise HTTPException(status_code=404, detail="profile no longer exists")
+
+        new_token = secrets.token_urlsafe(24)
+        session.add(
+            SearchToken(
+                token=new_token,
+                profile_slug=profile.slug,
+                source_id=dl.source_id,
+                external_id=dl.external_id,
+                media_type=dl.media_type,
+                title=dl.title,
+                author=dl.author,
+                year=dl.year,
+                size_bytes=dl.size_bytes,
+            )
+        )
+    return {
+        "new_token": new_token,
+        "profile_slug": profile.slug,
+        "torrent_url": f"/torznab/{profile.slug}/download/{new_token}.torrent",
+        "message": (
+            "GET the torrent_url to execute the grab. Prowlarr / Bookshelf "
+            "can also be pointed at it manually."
+        ),
+    }
+
+
+@router.post("/downloads/{download_id}/cancel")
+async def api_cancel_download(download_id: str) -> dict:
+    """Mark a non-terminal grab as failed with a 'cancelled by user' reason.
+
+    Can't truly kill the worker thread (Python threads don't cancel),
+    but flipping the DB row lets the active-grabs UI stop showing it
+    and frees the slot. The underlying Shelfmark cascade will run to
+    its own timeout (max 240 s) in the background; the reservation
+    above then silently drops.
+    """
+    import datetime as dt
+    from sqlalchemy import select
+
+    from grabarr.db.session import session_scope
+    from grabarr.downloads.models import Download
+
+    async with session_scope() as session:
+        row = await session.execute(select(Download).where(Download.id == download_id))
+        dl = row.scalar_one_or_none()
+        if dl is None:
+            raise HTTPException(status_code=404, detail="download not found")
+        terminal = {"seeding", "completed", "failed"}
+        if dl.status in terminal:
+            return {"status": dl.status, "changed": False}
+        dl.status = "failed"
+        dl.failure_reason = "cancelled by user"
+        dl.completed_at = dt.datetime.now(dt.UTC)
+    return {"status": "failed", "changed": True}
+
+
 @router.delete("/downloads/{download_id}", status_code=204)
 async def api_delete_download(download_id: str) -> None:
     from pathlib import Path
@@ -797,6 +881,26 @@ async def api_prowlarr_config(
             ),
         },
     )
+
+
+@router.get("/debug/shelfmark-config")
+async def api_debug_shelfmark_config() -> dict:
+    """Dump whatever the Shelfmark config proxy actually returns right now.
+
+    Diagnostic for the "bridge says X but Shelfmark sees Y" class of
+    bugs. Reads the SAME proxy Shelfmark's vendored code reads, so the
+    values here are what bypasser/network/cascade will actually use.
+    """
+    from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy as proxy
+
+    keys = [
+        "USING_EXTERNAL_BYPASSER", "USE_CF_BYPASS",
+        "EXT_BYPASSER_URL", "EXT_BYPASSER_PATH", "EXT_BYPASSER_TIMEOUT",
+        "AA_BASE_URL", "AA_MIRROR_URLS", "AA_DONATOR_KEY",
+        "USE_DOH", "DOH_SERVER", "CUSTOM_DNS",
+        "MAX_RETRY", "DEFAULT_SLEEP", "SOURCE_PRIORITY",
+    ]
+    return {k: proxy.get(k, "<MISSING>") for k in keys}
 
 
 # ---- Bypass (FlareSolverr) ---------------------------------------------
