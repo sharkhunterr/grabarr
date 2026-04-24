@@ -52,15 +52,24 @@ def _sources_from_profile(profile: Profile) -> list[SourcePriorityEntry]:
 
 
 def _dedup(results: list[SearchResult]) -> list[SearchResult]:
-    """De-duplicate by (normalized_title, author, year, format).
+    """De-duplicate by (source_id, normalized_title, author, year, format).
 
-    The first occurrence wins; subsequent duplicates are dropped. Input
-    order determines priority (orchestrator pre-sorts by quality_score).
+    Including source_id means the same md5 surfaced by two adapters
+    shows up as TWO rows — one per source, with its own [SOURCE] tag
+    visible to Prowlarr / Bookshelf. The operator picks the one they
+    trust (LibGen first for speed, AA as fallback, etc.). First
+    occurrence within a source wins.
     """
-    seen: set[tuple[str, str | None, int | None, str]] = set()
+    seen: set[tuple[str, str, str | None, int | None, str]] = set()
     out: list[SearchResult] = []
     for r in results:
-        key = (r.title.strip().lower(), (r.author or "").strip().lower() or None, r.year, r.format.lower())
+        key = (
+            r.source_id,
+            r.title.strip().lower(),
+            (r.author or "").strip().lower() or None,
+            r.year,
+            r.format.lower(),
+        )
         if key in seen:
             continue
         seen.add(key)
@@ -195,7 +204,26 @@ async def orchestrate_search(
 
     all_results = _dedup(all_results)
     all_results.sort(key=lambda r: r.quality_score, reverse=True)
-    return all_results[:limit]
+    # Round-robin by source_id so no single source (e.g. AA with its
+    # weight=1.2 advantage) crowds the others out of the [:limit] slice.
+    # Each pass picks the highest-quality remaining item per source,
+    # cycling until `limit` is reached.
+    by_source: dict[str, list[SearchResult]] = {}
+    for r in all_results:
+        by_source.setdefault(r.source_id, []).append(r)
+    interleaved: list[SearchResult] = []
+    while len(interleaved) < limit:
+        progress = False
+        for sid in list(by_source):
+            if not by_source[sid]:
+                continue
+            interleaved.append(by_source[sid].pop(0))
+            progress = True
+            if len(interleaved) >= limit:
+                break
+        if not progress:
+            break
+    return interleaved
 
 
 async def test_profile(profile: Profile, query: str, limit: int = 10) -> dict:
