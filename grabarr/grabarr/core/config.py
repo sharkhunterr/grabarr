@@ -166,7 +166,45 @@ def install_shelfmark_bridge(backend: _SettingsBackendProtocol) -> None:
     Call this once during app startup, AFTER the database is initialized.
     Before this call, the proxy falls back to env vars + built-in
     defaults (which is enough to get migrations and seeding to run).
+
+    Also monkey-patches Shelfmark's hardcoded ``_get_browser_args`` to
+    append Docker-friendly Chrome flags (--no-zygote, --single-process,
+    --disable-crash-reporter). These three in particular are what keep
+    Chrome from SIGTRAP-ing in a container on a host without perfect
+    user-namespace / sandbox support. The monkey-patch is scoped to
+    this process, never written to disk — Shelfmark upstream is
+    untouched.
     """
     from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy
 
     shelfmark_config_proxy._bind_backend(backend)
+
+    # Monkey-patch browser args — idempotent + additive.
+    try:
+        from grabarr.vendor.shelfmark.bypass import internal_bypasser as _ib
+
+        _DOCKER_SAFE_ARGS = [
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-crash-reporter",
+            "--disable-breakpad",
+            # --no-zygote + --single-process keep Chrome from spawning
+            # child helpers that die under Docker's default seccomp/userns.
+            "--no-zygote",
+            "--single-process",
+            "--disable-gpu",
+        ]
+        _orig_get_browser_args = _ib._get_browser_args
+
+        def _patched_get_browser_args():  # noqa: ANN202
+            args = list(_orig_get_browser_args())
+            for a in _DOCKER_SAFE_ARGS:
+                if a not in args:
+                    args.append(a)
+            return args
+
+        _ib._get_browser_args = _patched_get_browser_args
+    except ImportError:
+        # internal_bypasser optional (e.g. external-only deploy).
+        pass

@@ -83,13 +83,23 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     CONFIG_DIR=/data/shelfmark/config \
     TMP_DIR=/data/shelfmark/tmp \
     INGEST_DIR=/data/shelfmark/ingest \
-    # cdp_driver launches Chromium via Xvfb; the display number is picked
-    # dynamically but HOME must be writable for the profile cache.
-    HOME=/home/grabarr
+    # Chrome needs a writable HOME for its profile cache, ~/.config dirs,
+    # and the .local/share/applications/mimeapps.list bootstrapping it
+    # does on every launch. /tmp is world-writable so the uid the user
+    # picks via docker-compose's `user:` directive always works.
+    HOME=/tmp \
+    XDG_CONFIG_HOME=/tmp/.config \
+    XDG_CACHE_HOME=/tmp/.cache
 
-# Runtime libs + Chromium + Xvfb + ffmpeg. These are what make bypass.mode=internal
-# actually work — SeleniumBase's cdp_driver drives a headless Chromium inside a
-# virtual framebuffer and needs ffmpeg for its optional debug recording path.
+# Runtime libs + Google Chrome + Xvfb + ffmpeg. These are what make
+# bypass.mode=internal actually work — SeleniumBase's cdp_driver drives
+# a headless Chrome inside a virtual framebuffer and needs ffmpeg for
+# its optional debug recording path.
+#
+# We use google-chrome-stable from Google's repo rather than Debian's
+# chromium package because the latter crashes in Docker with a
+# crashpad error (Trace/breakpoint trap) even with --no-sandbox +
+# --disable-crashpad — see https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=1052478
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libxml2 \
         libxslt1.1 \
@@ -98,15 +108,36 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libboost-system1.83.0 \
         ca-certificates \
         curl \
-        chromium \
-        chromium-driver \
+        gnupg \
         xvfb \
         ffmpeg \
         fonts-liberation \
         libnss3 \
         libgbm1 \
+        libasound2 \
+        libxcomposite1 \
+        libxdamage1 \
+        libxrandr2 \
+        libx11-xcb1 \
+        libxkbcommon0 \
+        libcairo2 \
+        libpango-1.0-0 \
+        libatk1.0-0 \
+        libatk-bridge2.0-0 \
+        libdrm2 \
+    # Add Google's Chrome signing key + repo, then install chrome-stable.
+    && curl -sSL https://dl.google.com/linux/linux_signing_key.pub \
+        | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg \
+    && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb/ stable main" \
+        > /etc/apt/sources.list.d/google-chrome.list \
+    && apt-get update && apt-get install -y --no-install-recommends \
+        google-chrome-stable \
     && rm -rf /var/lib/apt/lists/* \
-    && useradd --system --create-home --home-dir /home/grabarr grabarr
+    && useradd --system --create-home --home-dir /home/grabarr grabarr \
+    # Shelfmark's cdp_driver looks for `chromium` or `google-chrome` in PATH;
+    # make both names resolve to the Google Chrome binary.
+    && ln -sf /usr/bin/google-chrome-stable /usr/local/bin/chromium \
+    && ln -sf /usr/bin/google-chrome-stable /usr/local/bin/google-chrome
 
 # Bring over the installed venv and project from builder.
 COPY --from=builder --chown=grabarr:grabarr /opt/grabarr /opt/grabarr
@@ -120,7 +151,15 @@ RUN mkdir -p /config /data /downloads/incoming /downloads/ready \
              /data/shelfmark/config \
              /data/shelfmark/tmp \
              /data/shelfmark/ingest \
-    && chown -R grabarr:grabarr /config /data /downloads
+             /tmp/shelfmark/seleniumbase/downloaded_files \
+    && chown -R grabarr:grabarr /config /data /downloads /tmp/shelfmark \
+    # SeleniumBase's cdp_driver writes a 'downloaded_files' dir in cwd by
+    # default; our WORKDIR is /opt/grabarr which is chown'd to 'grabarr'
+    # but when docker-compose sets user: 1000:1000 (so ./data/* files are
+    # owned by the host user) that uid can't write here. Make the whole
+    # workdir world-writable with sticky bit — only affects files created
+    # at runtime, not the venv/code which stay read-only.
+    && chmod 1777 /opt/grabarr
 
 USER grabarr
 

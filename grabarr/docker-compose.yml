@@ -15,6 +15,25 @@ services:
     image: grabarr:1.0.0
     container_name: grabarr
     restart: unless-stopped
+    # Run as the host user so files written to ./config, ./data, ./downloads
+    # stay owned by you and the container can read/write them. Set via
+    # `export UID` in your shell or hardcode to match your host: `id -u`.
+    user: "${UID:-1000}:${GID:-1000}"
+    # Chromium (used by the internal bypasser) needs a sensible /dev/shm.
+    # Docker's default 64 MB triggers "Pure CDP browser startup failed:
+    # Exception:" with no details — the browser dies before cdp-driver
+    # can attach. 2 GB is what Chromium's upstream docs recommend.
+    shm_size: 2gb
+    # cdp_driver drops the Linux sandbox since the user is non-root;
+    # we keep that default but let the container itself keep the
+    # minimal privileges needed to run Chromium.
+    security_opt:
+      - seccomp:unconfined
+    # Optional: capture any core dumps + let Chromium open more fds.
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     ports:
       - "8080:8080"
       # libtorrent listen range for active_seed mode.
