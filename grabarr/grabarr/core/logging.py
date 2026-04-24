@@ -337,6 +337,76 @@ def configure_root(
             h.setFormatter(formatter)
 
 
+# ---- Shelfmark compat shim ------------------------------------------------
+#
+# Shelfmark's vendored code calls a handful of custom methods on the logger
+# it imports via setup_logger (see shelfmark/core/logger.py:CustomLogger).
+# Our bridge returns a plain logging.Logger, which would AttributeError on
+# those calls. We graft the methods on once per logger instance so both
+# Grabarr-side callers (who use .info/.warning) and Shelfmark-side callers
+# (who use .error_trace / .warning_trace / .log_resource_usage) work.
+
+
+def _log_resource_usage(self) -> None:
+    """Debug-level container memory + CPU snapshot (best-effort, no-op on
+    failure). Mirrors Shelfmark's CustomLogger.log_resource_usage."""
+    try:
+        import psutil
+
+        try:
+            rss_mb = psutil.Process().memory_info().rss / (1024 * 1024)
+        except Exception:  # noqa: BLE001
+            rss_mb = 0.0
+        mem = psutil.virtual_memory()
+        self.debug(
+            "resources: rss=%.1fMB sys_used=%.1fMB avail=%.1fMB cpu=%.1f%%",
+            rss_mb,
+            mem.used / (1024 * 1024),
+            mem.available / (1024 * 1024),
+            psutil.cpu_percent(),
+        )
+    except Exception:  # noqa: BLE001
+        return
+
+
+def _error_trace(self, msg, *args, **kwargs) -> None:
+    kwargs.pop("exc_info", None)
+    self.error(msg, *args, exc_info=True, **kwargs)
+
+
+def _warning_trace(self, msg, *args, **kwargs) -> None:
+    kwargs.pop("exc_info", None)
+    self.warning(msg, *args, exc_info=True, **kwargs)
+
+
+def _info_trace(self, msg, *args, **kwargs) -> None:
+    import sys as _sys
+
+    kwargs.pop("exc_info", None)
+    self.info(msg, *args, exc_info=_sys.exc_info()[0] is not None, **kwargs)
+
+
+def _debug_trace(self, msg, *args, **kwargs) -> None:
+    import sys as _sys
+
+    kwargs.pop("exc_info", None)
+    self.debug(msg, *args, exc_info=_sys.exc_info()[0] is not None, **kwargs)
+
+
+def _attach_shelfmark_compat(logger: logging.Logger) -> logging.Logger:
+    if not hasattr(logger, "log_resource_usage"):
+        logger.log_resource_usage = _log_resource_usage.__get__(logger, type(logger))  # type: ignore[attr-defined]
+    if not hasattr(logger, "error_trace"):
+        logger.error_trace = _error_trace.__get__(logger, type(logger))  # type: ignore[attr-defined]
+    if not hasattr(logger, "warning_trace"):
+        logger.warning_trace = _warning_trace.__get__(logger, type(logger))  # type: ignore[attr-defined]
+    if not hasattr(logger, "info_trace"):
+        logger.info_trace = _info_trace.__get__(logger, type(logger))  # type: ignore[attr-defined]
+    if not hasattr(logger, "debug_trace"):
+        logger.debug_trace = _debug_trace.__get__(logger, type(logger))  # type: ignore[attr-defined]
+    return logger
+
+
 def setup_logger(name: str) -> logging.Logger:
     """Return a configured logger for the given dotted name.
 
@@ -345,11 +415,14 @@ def setup_logger(name: str) -> logging.Logger:
     clause 3 and the bridge in
     ``grabarr/vendor/shelfmark/_grabarr_adapter.py``). A single call lazily
     configures the root handler with a redaction + correlation-ID filter;
-    subsequent calls return the child logger.
+    subsequent calls return the child logger — and grafts Shelfmark's
+    CustomLogger helper methods (``error_trace`` / ``warning_trace`` /
+    ``log_resource_usage`` / …) onto it so vendored code that expects them
+    doesn't AttributeError.
     """
     if not _configured_root:
         configure_root(
             level=os.environ.get("GRABARR_LOG_LEVEL", "INFO"),
             fmt=os.environ.get("LOG_FORMAT", "text"),
         )
-    return logging.getLogger(name)
+    return _attach_shelfmark_compat(logging.getLogger(name))
