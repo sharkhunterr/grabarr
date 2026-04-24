@@ -102,7 +102,16 @@ def build_webseed_torrent(
         "creation date": int(dt.datetime.now(dt.UTC).timestamp()),
         "created by": "Grabarr/1.0.0",
         "comment": comment,
-        "url-list": [webseed_url],  # BEP-19
+        # BEP-19 webseed — emit as a BARE STRING (not a 1-element list).
+        # Per spec both shapes are legal, but qBittorrent/Transmission
+        # historically require the string form when there's a single
+        # URL; the list form is sometimes ignored silently, which
+        # leaves the client with 0 peers AND no webseed fallback.
+        "url-list": webseed_url,
+        # BEP-17 httpseeds — the older webseed convention. Emitted
+        # alongside url-list so clients that only implement one of
+        # the two still pick up the URL.
+        "httpseeds": [webseed_url],
     }
     return TorrentBlob(
         bencoded=encode(torrent),
