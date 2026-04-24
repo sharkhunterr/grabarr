@@ -20,7 +20,7 @@ import datetime as dt
 import secrets
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import delete, select, update
 
 from grabarr.adapters.base import AdapterError
 from grabarr.core.config import get_settings
@@ -193,6 +193,21 @@ async def prepare_and_generate_torrent(
         dl.ready_at = now
         dl.seeded_at = now
 
+        # The same info_hash is deterministic-from-content, so re-grabbing
+        # the same file would collide on torrents.info_hash (PK) AND
+        # torrents.download_id (UNIQUE, since we'd now have a second
+        # download row pointing at it). Replace any prior torrent row
+        # for this hash AND detach any other download rows that still
+        # claim it as theirs — this new download owns it now.
+        await session.execute(
+            update(Download)
+            .where(Download.info_hash == blob.info_hash, Download.id != dl.id)
+            .values(info_hash=None, status=DownloadStatus.COMPLETED.value)
+        )
+        await session.execute(
+            delete(Torrent).where(Torrent.info_hash == blob.info_hash)
+        )
+        await session.flush()
         session.add(
             Torrent(
                 info_hash=blob.info_hash,

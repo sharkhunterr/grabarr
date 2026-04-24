@@ -61,5 +61,8 @@ class Download(Base):
         ),
         Index("ix_downloads_profile_status", "profile_id", "status"),
         Index("ix_downloads_started_at_desc", "started_at"),
-        Index("ix_downloads_info_hash", "info_hash", unique=True),
+        # Non-unique: the same file can be grabbed multiple times with
+        # different tokens (Prowlarr retries, user re-queues, etc.).
+        # The info_hash is a content fingerprint, not a request key.
+        Index("ix_downloads_info_hash", "info_hash"),
     )
