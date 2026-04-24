@@ -34,6 +34,40 @@
   </div>
 </div>
 
+<!-- Torznab activity — shows what Prowlarr / Bookshelf actually queried
+     and how many items Grabarr returned, so "Grabarr returns nothing"
+     can be diagnosed at the wire level without digging in the log. -->
+<div class="card mb-6">
+  <div class="card-body">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+        Torznab activity (last 200)
+      </h2>
+      <span id="torznab-count" class="badge-neutral">0</span>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-xs">
+        <thead class="text-left uppercase text-gray-500 dark:text-gray-400">
+          <tr>
+            <th class="pb-2 pr-3 font-medium">Time</th>
+            <th class="pb-2 pr-3 font-medium">Client</th>
+            <th class="pb-2 pr-3 font-medium">Op</th>
+            <th class="pb-2 pr-3 font-medium">Query</th>
+            <th class="pb-2 pr-3 font-medium text-right">Results</th>
+            <th class="pb-2 pr-3 font-medium text-right">Took</th>
+            <th class="pb-2 pr-3 font-medium">Status</th>
+          </tr>
+        </thead>
+        <tbody id="torznab-body" class="divide-y divide-gray-100 dark:divide-gray-800">
+          <tr><td colspan="7" class="py-3 text-center text-gray-500 dark:text-gray-400">
+            No torznab queries seen yet — trigger a search in Prowlarr or Bookshelf.
+          </td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <div class="card overflow-x-auto">
   <table class="w-full text-sm">
     <thead class="text-left text-xs uppercase text-gray-500 dark:text-gray-400">
@@ -241,16 +275,55 @@
     } catch (_) { /* ignore transient errors */ }
   }
 
+  async function refreshTorznabActivity() {
+    try {
+      const r = await fetch('/api/torznab/activity');
+      if (!r.ok) return;
+      const data = await r.json();
+      const items = data.items || [];
+      document.getElementById('torznab-count').textContent = items.length;
+      const body = document.getElementById('torznab-body');
+      if (!items.length) return;
+      body.innerHTML = items.slice(0, 30).map(it => {
+        const qparts = [];
+        if (it.q) qparts.push('q="' + escHtml(it.q) + '"');
+        if (it.author) qparts.push('author="' + escHtml(it.author) + '"');
+        if (it.title) qparts.push('title="' + escHtml(it.title) + '"');
+        if (it.cat) qparts.push('cat=' + escHtml(it.cat));
+        const q = qparts.length ? qparts.join(' · ') : '<em class="text-gray-500">(empty)</em>';
+        const ok = it.http_status === 200;
+        const countClass = (ok && it.result_count > 0) ? 'text-emerald-600 font-semibold'
+                         : (ok && it.result_count === 0) ? 'text-amber-600'
+                         : 'text-red-600';
+        return `<tr>
+          <td class="py-1.5 pr-3 font-mono">${escHtml(it.ts.slice(11, 19))}</td>
+          <td class="py-1.5 pr-3 font-mono text-xs">${escHtml(it.client_ip)}</td>
+          <td class="py-1.5 pr-3">${escHtml(it.t || '')}</td>
+          <td class="py-1.5 pr-3">${q}</td>
+          <td class="py-1.5 pr-3 text-right ${countClass}">${it.result_count}</td>
+          <td class="py-1.5 pr-3 text-right font-mono">${it.took_ms}ms</td>
+          <td class="py-1.5 pr-3">
+            ${ok ? '<span class="badge-success">200</span>' : '<span class="badge-error" title="'+escHtml(it.error||'')+'">'+it.http_status+'</span>'}
+          </td>
+        </tr>`;
+      }).join('');
+    } catch (_) {}
+  }
+
   let _autoTimer = null;
   function scheduleAutoRefresh() {
     if (_autoTimer) clearInterval(_autoTimer);
     if (document.getElementById('auto-refresh').checked) {
-      _autoTimer = setInterval(refreshActiveGrabs, 3000);
+      _autoTimer = setInterval(() => {
+        refreshActiveGrabs();
+        refreshTorznabActivity();
+      }, 3000);
     }
   }
 
   document.addEventListener('DOMContentLoaded', () => {
     refreshActiveGrabs();
+    refreshTorznabActivity();
     scheduleAutoRefresh();
     document.getElementById('auto-refresh').addEventListener('change', scheduleAutoRefresh);
   });

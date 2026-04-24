@@ -285,6 +285,19 @@ def _build_search_rss(
 # ---- route handler -------------------------------------------------------
 
 
+# Ring buffer of recent torznab queries — for the debug dashboard.
+# Each entry: {ts, client_ip, slug, t, q, author, title, cat, result_count,
+# took_ms, http_status}. Capped at 200 so we don't grow unbounded.
+from collections import deque as _deque
+
+_TORZNAB_ACTIVITY: _deque = _deque(maxlen=200)
+
+
+def recent_torznab_activity() -> list[dict]:
+    """Snapshot of the recent torznab-query ring buffer (newest first)."""
+    return list(reversed(_TORZNAB_ACTIVITY))
+
+
 @router.get("/torznab/{slug}/api")
 async def torznab_api(
     slug: str,
@@ -343,10 +356,22 @@ async def torznab_api(
                 "game_rom": "game",
                 "video": "video",
             }.get(profile.media_type, "popular")
+        import datetime as _dt
+        import time as _time
+
+        t0 = _time.monotonic()
+        client = request.client.host if request.client else "?"
         try:
             results = await orchestrate_search(profile, composite_q, limit=limit)
         except Exception as exc:
             _log.warning("torznab: search crashed for %s q=%r: %s", slug, composite_q, exc)
+            _TORZNAB_ACTIVITY.append({
+                "ts": _dt.datetime.now(_dt.UTC).isoformat(timespec="seconds"),
+                "client_ip": client, "slug": slug, "t": t, "q": q,
+                "author": author, "title": title, "cat": cat,
+                "result_count": 0, "took_ms": int((_time.monotonic() - t0) * 1000),
+                "http_status": 500, "error": f"{type(exc).__name__}: {exc}",
+            })
             return _torznab_error(900, "search failed", status_code=500)
 
         # Register a pending Download row per result so the *arr client
@@ -355,6 +380,14 @@ async def torznab_api(
         for r in results:
             token = await register_result_token(profile=profile, result=r)
             results_with_tokens.append((r, token))
+
+        _TORZNAB_ACTIVITY.append({
+            "ts": _dt.datetime.now(_dt.UTC).isoformat(timespec="seconds"),
+            "client_ip": client, "slug": slug, "t": t, "q": q,
+            "author": author, "title": title, "cat": cat,
+            "result_count": len(results), "took_ms": int((_time.monotonic() - t0) * 1000),
+            "http_status": 200,
+        })
 
         return _xml_response(_build_search_rss(profile, composite_q, results_with_tokens, base_url))
 

@@ -932,6 +932,23 @@ async def api_bypass_test(body: dict[str, Any] = Body(default_factory=dict)) -> 
     }
 
 
+# ---- Torznab activity -------------------------------------------------
+
+
+@router.get("/torznab/activity")
+async def api_torznab_activity() -> dict:
+    """Return the recent ring-buffer of torznab queries seen by the server.
+
+    Lets you confirm what Prowlarr / Bookshelf actually sent, how many
+    items Grabarr returned for that exact query, and how long it took —
+    without crawling the access log.
+    """
+    from grabarr.api.torznab import recent_torznab_activity
+
+    items = recent_torznab_activity()
+    return {"items": items, "count": len(items)}
+
+
 # ---- Logs --------------------------------------------------------------
 
 
