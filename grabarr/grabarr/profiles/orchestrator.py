@@ -46,6 +46,7 @@ def _sources_from_profile(profile: Profile) -> list[SourcePriorityEntry]:
                 timeout_seconds=int(raw.get("timeout_seconds", 60)),
                 enabled=bool(raw.get("enabled", True)),
                 skip_if_member_required=bool(raw.get("skip_if_member_required", False)),
+                max_results=int(raw.get("max_results", 20)),
             )
         )
     return entries
@@ -90,9 +91,13 @@ async def _search_one(
     Returns an empty list on any adapter-side error; the orchestrator
     treats an empty list as "skip this source" and moves on.
     """
+    # Per-source cap: ask the adapter for at most `max_results` items
+    # (0 = no cap, fall back to the profile limit).
+    per_source_limit = entry.max_results if entry.max_results > 0 else limit
+    adapter_limit = min(limit, per_source_limit)
     try:
         results = await asyncio.wait_for(
-            adapter.search(query, media_type, filters, limit),
+            adapter.search(query, media_type, filters, adapter_limit),
             timeout=entry.timeout_seconds,
         )
     except TimeoutError:

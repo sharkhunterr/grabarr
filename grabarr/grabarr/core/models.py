@@ -44,6 +44,11 @@ class SourcePriorityEntry:
     timeout_seconds: int = 60
     enabled: bool = True
     skip_if_member_required: bool = False
+    # Per-source cap on how many items this adapter contributes to the
+    # final result set. 0 means "no cap" — the profile-level `limit`
+    # still applies after aggregation. 20 (default) is a sensible
+    # upper bound so one source can't flood AA/LibGen/IA results.
+    max_results: int = 20
 
 
 @dataclass(frozen=True, slots=True)

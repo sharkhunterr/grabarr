@@ -96,6 +96,9 @@
           <label class="text-xs text-gray-500 dark:text-gray-400">timeout
             <input type="number" min="1" max="600" data-timeout value="{{ entry.timeout_seconds }}" class="ml-1 !w-20 !py-1 text-xs">
           </label>
+          <label class="text-xs text-gray-500 dark:text-gray-400">max
+            <input type="number" min="0" max="100" data-max-results value="{{ entry.get('max_results', 20) }}" class="ml-1 !w-16 !py-1 text-xs" title="Max items per search (0 = no cap)">
+          </label>
           <label class="inline-flex items-center gap-1 text-xs cursor-pointer">
             <input type="checkbox" data-enabled {% if entry.enabled %}checked{% endif %}>
             <span class="text-gray-500 dark:text-gray-400">enabled</span>
