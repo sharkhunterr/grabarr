@@ -278,19 +278,34 @@ def _rebuild_blob(
 
 
 def _resolve_default_torrent_mode() -> str:
-    """Read the default torrent mode from env (future: settings table)."""
-    import os
+    """Read the default torrent mode from the live settings cache,
+    falling back to an env var then the hardcoded default.
 
-    return os.environ.get("GRABARR_TORRENT_MODE", TorrentMode.ACTIVE_SEED.value)
-
-
-def _resolve_default_download_mode() -> str:
-    """Read the default download mode from env (future: settings table).
-
-    Shipping default is ``sync`` per the Clarifications session.
+    The Settings UI (PATCH /api/settings with ``torrent.mode``) is the
+    authoritative source. The env var ``GRABARR_TORRENT_MODE`` is kept
+    for compose/Docker override at boot.
     """
     import os
 
+    from grabarr.core.settings_service import get_sync
+
+    cached = get_sync("torrent.mode", None)
+    if cached in ("active_seed", "webseed"):
+        return cached
+    return os.environ.get("GRABARR_TORRENT_MODE", TorrentMode.WEBSEED.value)
+
+
+def _resolve_default_download_mode() -> str:
+    """Read the default download mode from the live settings cache,
+    falling back to an env var then the hardcoded default.
+    """
+    import os
+
+    from grabarr.core.settings_service import get_sync
+
+    cached = get_sync("download.mode", None)
+    if cached in ("sync", "async_streaming", "hybrid"):
+        return cached
     return os.environ.get("GRABARR_DOWNLOAD_MODE", DownloadMode.SYNC.value)
 
 
