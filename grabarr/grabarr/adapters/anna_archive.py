@@ -386,7 +386,6 @@ class AnnaArchiveAdapter:
             _download_book,
             get_book_info,
         )
-        from grabarr.vendor.shelfmark._grabarr_adapter import shelfmark_config_proxy
 
         if not callable(get_book_info):
             raise AdapterError(
@@ -413,25 +412,14 @@ class AnnaArchiveAdapter:
             self.id, external_id, target_path,
         )
 
-        # Constrain Shelfmark's cascade to AA-only sub-sources for the
-        # duration of this download. Grabarr's profile-level orchestrator
-        # already owns cross-source ordering (AA → libgen → IA → Z-Lib
-        # each as its own adapter), so letting Shelfmark ALSO cascade
-        # into libgen/welib/zlib wastes time on mirrors Grabarr will
-        # fall through to next anyway. If AA exhausts, the orchestrator
-        # moves to the next adapter per the profile.
-        ctx = _ShelfmarkSourcePriorityOverride(
-            shelfmark_config_proxy,
-            fast=[
-                {"id": "aa-fast", "enabled": True},
-            ],
-            slow=[
-                {"id": "aa-slow-nowait", "enabled": True},
-                {"id": "aa-slow-wait", "enabled": True},
-            ],
-        )
-        with ctx:
-            success_url = _download_book(book_info, target_path)
+        # Let Shelfmark drive its full cascade — aa-fast (if donator key),
+        # libgen (no CF needed), aa-slow-* (CF bypass), welib, zlib. This
+        # is what Shelfmark-in-Docker does, and matches the user's
+        # expected "it just works" behaviour. Grabarr's profile-level
+        # source ordering is now only used for SEARCH result ordering;
+        # once a grab picks an AA result, Shelfmark's internal cascade
+        # is authoritative for the download.
+        success_url = _download_book(book_info, target_path)
         if not success_url or not target_path.exists() or target_path.stat().st_size == 0:
             # Clean up the empty scratch dir so we don't leak anything.
             try:
