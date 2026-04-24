@@ -352,16 +352,46 @@ class AnnaArchiveAdapter:
             _log.warning("%s search_books raised: %s", self.id, exc)
             return []
 
+    # Hard ceiling on a single grab. Shelfmark's cascade, bypasser
+    # retries, mirror rotation, and DoH provider cycling can compound
+    # into >10-minute stalls when every source is failing. The orchestrator
+    # ALSO holds global Shelfmark singletons (DNS resolver, bypasser
+    # state) during that time, so a stuck grab drags other concurrent
+    # requests with it. Cap the whole pipeline at 4 minutes and fail
+    # fast — the next request gets a clean slate.
+    _DOWNLOAD_HARD_TIMEOUT_SECONDS = 240
+
     async def get_download_info(
         self,
         external_id: str,
         media_type: MediaType,
     ) -> DownloadInfo:
+        import threading
+
         await rate_limiter.acquire(self.id, "download")
+        cancel_flag = threading.Event()
         try:
-            result = await asyncio.to_thread(
-                self._call_download_via_shelfmark, external_id, media_type
+            result = await asyncio.wait_for(
+                asyncio.to_thread(
+                    self._call_download_via_shelfmark,
+                    external_id,
+                    media_type,
+                    cancel_flag,
+                ),
+                timeout=self._DOWNLOAD_HARD_TIMEOUT_SECONDS,
             )
+        except asyncio.TimeoutError:
+            # Tell Shelfmark's cascade to bail at the next checkpoint —
+            # its _download_book / _try_download_url / get_bypassed_page
+            # paths all honour the cancel flag.
+            cancel_flag.set()
+            raise AdapterError(
+                f"{self.id}: grab exceeded hard timeout of "
+                f"{self._DOWNLOAD_HARD_TIMEOUT_SECONDS}s — cascade stopped. "
+                "This usually means every source is unreachable or the CF "
+                "bypasser can't solve the challenge. Try the next adapter "
+                "or grab a different result."
+            ) from None
         except AdapterError:
             raise
         except Exception as exc:
@@ -380,7 +410,10 @@ class AnnaArchiveAdapter:
         )
 
     def _call_download_via_shelfmark(
-        self, external_id: str, media_type: MediaType
+        self,
+        external_id: str,
+        media_type: MediaType,
+        cancel_flag: "threading.Event | None" = None,
     ) -> tuple["Path", int | None, str | None, str]:
         """Run Shelfmark's full ``_download_book`` cascade into a temp file.
 
@@ -432,7 +465,7 @@ class AnnaArchiveAdapter:
         # source ordering is now only used for SEARCH result ordering;
         # once a grab picks an AA result, Shelfmark's internal cascade
         # is authoritative for the download.
-        success_url = _download_book(book_info, target_path)
+        success_url = _download_book(book_info, target_path, cancel_flag=cancel_flag)
         if not success_url or not target_path.exists() or target_path.stat().st_size == 0:
             # Clean up the empty scratch dir so we don't leak anything.
             try:
