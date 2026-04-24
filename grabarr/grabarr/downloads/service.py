@@ -52,35 +52,29 @@ async def register_result_token(
     profile: Profile,
     result: SearchResult,
 ) -> str:
-    """Insert a pending ``downloads`` row and return its URL-safe token.
+    """Mint a URL-safe token pointing at a search result.
 
     Called by the Torznab endpoint for every ``<item>`` it renders. The
-    token is the one the *arr client will later request as
-    ``/torznab/{slug}/download/{token}.torrent``.
-
-    Returns the token.
+    row lands in ``search_tokens`` (ephemeral) — it only graduates to a
+    real ``downloads`` row when an *arr client actually hits
+    ``/torznab/{slug}/download/{token}.torrent``. This keeps the
+    downloads page showing ACTUAL grabs, not every search hit.
     """
+    from grabarr.downloads.search_tokens import SearchToken
+
     token = secrets.token_urlsafe(24)
     async with session_scope() as session:
         session.add(
-            Download(
+            SearchToken(
                 token=token,
-                profile_id=profile.id,
+                profile_slug=profile.slug,
                 source_id=result.source_id,
                 external_id=result.external_id,
                 media_type=result.media_type.value,
-                download_mode=DownloadMode.SYNC.value,
-                torrent_mode=TorrentMode.WEBSEED.value,  # MVP default
                 title=result.title,
                 author=result.author,
                 year=result.year,
-                filename=result.title,  # replaced post-download
                 size_bytes=result.size_bytes,
-                content_type=None,
-                magic_verified=False,
-                file_path=None,
-                info_hash=None,
-                status=DownloadStatus.QUEUED.value,
             )
         )
     return token
@@ -100,14 +94,54 @@ async def prepare_and_generate_torrent(
     mode). ``tracker_port`` is the internal tracker's port for the
     announce URL.
     """
-    # 1. Load the pending row and determine the per-profile torrent mode.
+    # 1. Resolve the token — might hit an existing Download row (re-grab
+    #    of a cached file) OR a fresh SearchToken (first-time grab, still
+    #    ephemeral). In the latter case we materialise a Download row now.
+    from grabarr.downloads.search_tokens import SearchToken
+
     async with session_scope() as session:
         row = await session.execute(select(Download).where(Download.token == token))
         dl = row.scalar_one_or_none()
+
         if dl is None:
-            raise DownloadNotFound(token)
+            st_row = await session.execute(
+                select(SearchToken).where(SearchToken.token == token)
+            )
+            st = st_row.scalar_one_or_none()
+            if st is None:
+                raise DownloadNotFound(token)
+            # Materialise: a real grab is starting now.
+            profile_row = await session.execute(
+                select(Profile).where(Profile.slug == slug)
+            )
+            profile = profile_row.scalar_one_or_none()
+            if profile is None:
+                raise DownloadNotFound(f"profile {slug!r} missing for token {token}")
+            dl = Download(
+                token=token,
+                profile_id=profile.id,
+                source_id=st.source_id,
+                external_id=st.external_id,
+                media_type=st.media_type,
+                download_mode=DownloadMode.SYNC.value,
+                torrent_mode=TorrentMode.WEBSEED.value,
+                title=st.title,
+                author=st.author,
+                year=st.year,
+                filename=st.title,  # replaced post-download
+                size_bytes=st.size_bytes,
+                content_type=None,
+                magic_verified=False,
+                file_path=None,
+                info_hash=None,
+                status=DownloadStatus.QUEUED.value,
+            )
+            session.add(dl)
+            await session.flush()
+
         if dl.status == DownloadStatus.SEEDING.value and dl.info_hash and dl.file_path:
             return _rebuild_blob(dl, slug, host_base_url, tracker_port)
+
         media_type = MediaType(dl.media_type)
         external_id = dl.external_id
         source_id = dl.source_id

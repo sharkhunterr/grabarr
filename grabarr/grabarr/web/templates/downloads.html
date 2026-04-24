@@ -5,9 +5,30 @@
 <div class="flex flex-wrap items-start justify-between gap-4 mb-6">
   <div>
     <h1 class="page-title">Downloads</h1>
-    <p class="page-subtitle">{{ total }} total · page {{ page }} / {{ pages }}</p>
+    <p class="page-subtitle">
+      {{ total }} total · page {{ page }} / {{ pages }} ·
+      <label class="inline-flex items-center gap-2">
+        <input id="auto-refresh" type="checkbox" checked>
+        <span class="text-xs">Auto-refresh 5s</span>
+      </label>
+    </p>
   </div>
   <button type="button" class="btn-secondary" onclick="openFilters()">Filters</button>
+</div>
+
+<!-- Active grabs panel — refreshes every 3 s, shows only non-terminal statuses.
+     Grabs run in parallel via asyncio.to_thread; whatever you kick off from
+     Bookshelf or manually appears here in real time. -->
+<div id="active-grabs-card" class="card mb-6 hidden">
+  <div class="card-body">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+        Active grabs
+      </h2>
+      <span id="active-grabs-count" class="badge-warning">0</span>
+    </div>
+    <div id="active-grabs-body" class="space-y-2"></div>
+  </div>
 </div>
 
 <div class="card overflow-x-auto">
@@ -124,6 +145,91 @@
     if (r.ok) { toast('Deleted', 'ok'); setTimeout(() => window.location.reload(), 400); }
     else toast('Delete failed: ' + await r.text(), 'err', 5000);
   }
+
+  // ---- Live "active grabs" poll (3 s) -----------------------------------
+  // Any row whose status is not terminal (seeding / completed / failed) is
+  // "in flight" — we want to see those in real time without reloading.
+  const ACTIVE_STATES = new Set(['queued','resolving','downloading','verifying','ready']);
+
+  const STATE_LABEL = {
+    queued     : 'queued'          , // waiting to start
+    resolving  : 'resolving source', // calling adapter.get_download_info
+    downloading: 'downloading file', // streaming from webseed/libgen/AA
+    verifying  : 'verifying'       , // magic-byte + format checks
+    ready      : 'ready'           , // file staged, building torrent
+    seeding    : 'seeding'         , // webseed / active_seed online
+    completed  : 'completed'       , // grabbed at least once, cache served
+    failed     : 'failed'          ,
+  };
+
+  function statusClass(s) {
+    if (s === 'seeding' || s === 'completed') return 'badge-success';
+    if (s === 'failed') return 'badge-error';
+    if (ACTIVE_STATES.has(s)) return 'badge-warning';
+    return 'badge-neutral';
+  }
+
+  function timeSince(iso) {
+    if (!iso) return '—';
+    const t = new Date(iso).getTime();
+    const s = Math.max(0, Math.floor((Date.now() - t) / 1000));
+    if (s < 60) return s + 's';
+    if (s < 3600) return Math.floor(s / 60) + 'm ' + (s % 60) + 's';
+    return Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm';
+  }
+
+  function escHtml(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  async function refreshActiveGrabs() {
+    // Pull one page sized 50 sorted by started_at DESC; ActiveStates filter
+    // happens client-side so we don't need a new endpoint.
+    try {
+      const r = await fetch('/api/downloads?page=1&size=50');
+      if (!r.ok) return;
+      const data = await r.json();
+      const active = (data.items || []).filter(i => ACTIVE_STATES.has(i.status));
+      const card = document.getElementById('active-grabs-card');
+      const body = document.getElementById('active-grabs-body');
+      const count = document.getElementById('active-grabs-count');
+      count.textContent = active.length;
+      if (!active.length) {
+        card.classList.add('hidden');
+        return;
+      }
+      card.classList.remove('hidden');
+      body.innerHTML = active.map(d => `
+        <div class="grid grid-cols-[1fr_auto_auto_auto] gap-3 items-center text-sm
+                    rounded-lg border border-gray-200 bg-gray-50 px-3 py-2
+                    dark:border-gray-800 dark:bg-gray-950">
+          <div class="min-w-0 truncate" title="${escHtml(d.title)}">
+            <span class="font-medium">${escHtml(d.title)}</span>
+            <span class="ml-2 text-xs text-gray-500">via ${escHtml(d.source_id)}</span>
+          </div>
+          <span class="${statusClass(d.status)}">${STATE_LABEL[d.status] || d.status}</span>
+          <span class="text-xs font-mono text-gray-500" title="${escHtml(d.started_at || '')}">
+            ${timeSince(d.started_at)}
+          </span>
+          <button class="btn-ghost btn-sm text-red-600"
+                  onclick="deleteDownload('${d.id}')">×</button>
+        </div>`).join('');
+    } catch (_) { /* ignore transient errors */ }
+  }
+
+  let _autoTimer = null;
+  function scheduleAutoRefresh() {
+    if (_autoTimer) clearInterval(_autoTimer);
+    if (document.getElementById('auto-refresh').checked) {
+      _autoTimer = setInterval(refreshActiveGrabs, 3000);
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    refreshActiveGrabs();
+    scheduleAutoRefresh();
+    document.getElementById('auto-refresh').addEventListener('change', scheduleAutoRefresh);
+  });
 
   function openFilters() {
     const current = new URLSearchParams(window.location.search);
