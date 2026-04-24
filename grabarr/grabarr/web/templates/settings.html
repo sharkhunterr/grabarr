@@ -144,6 +144,39 @@
 
 <div class="card">
   <div class="card-body space-y-4">
+    <h2 class="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Network</h2>
+    <p class="text-xs text-gray-500 dark:text-gray-400">
+      Override the system resolver for mirror lookups. Required when a
+      local Pi-hole / AdGuard / <code>/etc/hosts</code> sinkholes
+      <code>libgen.*</code>, <code>annas-archive.*</code>, or
+      <code>z-lib.*</code>. Grabarr then queries a public resolver
+      directly — mirrors behave like they do inside a Docker container
+      on a clean network.
+    </p>
+    <div class="grid gap-4 md:grid-cols-2">
+      <div>
+        <label class="inline-flex items-center gap-2 cursor-pointer mt-1">
+          <input type="checkbox" id="s-n-doh" name="network.use_doh"
+                 {% if settings['network.use_doh'] %}checked{% endif %}>
+          <span class="text-sm">Use DNS-over-HTTPS (Cloudflare)</span>
+        </label>
+      </div>
+      <div>
+        <label class="label" for="s-n-dns">Custom DNS (IPs, comma-separated)</label>
+        <input id="s-n-dns" type="text" name="network.custom_dns" class="w-full font-mono"
+               value="{{ settings['network.custom_dns'] }}"
+               placeholder="auto">
+        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          <code>auto</code> rotates Cloudflare/Google/Quad9/OpenDNS.
+          Ignored when DoH is on. Empty = system resolver.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body space-y-4">
     <h2 class="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Rate limits</h2>
     <div class="grid gap-4 md:grid-cols-2">
       <div>
@@ -227,9 +260,16 @@
 <script>
   async function saveSettings(e) {
     e.preventDefault();
-    const fd = new FormData(document.getElementById('settings-form'));
+    const form = document.getElementById('settings-form');
     const body = {};
+    // Checkboxes explicitly first so unchecked ones save as false
+    // (FormData omits unchecked boxes, so they'd never flip back off).
+    form.querySelectorAll('input[type="checkbox"][name]').forEach(cb => {
+      body[cb.name] = cb.checked;
+    });
+    const fd = new FormData(form);
     for (const [k, v] of fd.entries()) {
+      if (k in body) continue;  // already handled as bool
       if (/^(\d+|\d+\.\d+)$/.test(v)) body[k] = Number(v);
       else body[k] = v;
     }

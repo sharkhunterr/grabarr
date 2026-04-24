@@ -139,6 +139,20 @@ class _SettingsBackend:
             if not raw:
                 return default
             return [u.strip() for u in raw.split(",") if u.strip()]
+        if key == "USE_DOH":
+            return bool(get_sync("network.use_doh", False))
+        if key == "DOH_SERVER":
+            # When use_doh is on, Shelfmark queries this DoH endpoint.
+            # Cloudflare's JSON-over-HTTPS resolver is the most permissive
+            # and matches what Shelfmark's own DNS_PROVIDERS table uses.
+            if not bool(get_sync("network.use_doh", False)):
+                return default
+            return "https://cloudflare-dns.com/dns-query"
+        if key == "CUSTOM_DNS":
+            # "auto" → Shelfmark rotates Cloudflare/Google/Quad9/OpenDNS.
+            # Bare list → pinned to those servers.
+            v = (get_sync("network.custom_dns", "auto") or "auto").strip()
+            return v or "auto"
         return default
 
 

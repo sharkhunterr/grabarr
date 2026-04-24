@@ -441,7 +441,26 @@ async def api_list_settings() -> dict:
 async def api_patch_settings(body: dict[str, Any] = Body(...)) -> dict:
     from grabarr.core.settings_service import update_many
 
-    return await update_many(body)
+    result = await update_many(body)
+
+    # Apply live changes that Shelfmark caches internally — DNS resolver
+    # selection, AA mirror selection, SSL-validation mode. Without this,
+    # the user would need to restart the server for these to take effect.
+    network_keys = {
+        "network.use_doh",
+        "network.custom_dns",
+        "sources.anna_archive.aa_base_url",
+        "sources.anna_archive.aa_mirror_urls",
+    }
+    if network_keys.intersection(body.keys()):
+        try:
+            from grabarr.vendor.shelfmark.download import network as _net
+
+            _net.init(force=True)
+        except Exception as exc:  # noqa: BLE001
+            _log.warning("network.init(force=True) raised: %s", exc)
+
+    return result
 
 
 # ---- Downloads history -------------------------------------------------

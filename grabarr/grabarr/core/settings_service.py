@@ -42,6 +42,8 @@ _ALLOWED_KEYS: frozenset[str] = frozenset(
         "notifications.flap_cooldown_minutes",
         "sources.anna_archive.aa_base_url",
         "sources.anna_archive.aa_mirror_urls",
+        "network.use_doh",
+        "network.custom_dns",
     }
 )
 
@@ -77,6 +79,15 @@ _DEFAULTS: dict[str, Any] = {
     # Comma-separated override for the full mirror list. Empty = use
     # Shelfmark's DEFAULT_AA_MIRRORS.
     "sources.anna_archive.aa_mirror_urls": "",
+    # Route mirror lookups through Cloudflare DoH instead of the system
+    # resolver. Essential when the host uses a Pi-hole/AdGuard that
+    # poisons libgen / AA / Z-Lib hostnames. OFF by default so nothing
+    # changes for networks without a local DNS sinkhole.
+    "network.use_doh": False,
+    # Comma-separated list of DNS servers Shelfmark should use for
+    # mirror lookups. "auto" = rotate through Cloudflare/Google/Quad9.
+    # Empty = system resolver. Only applied when use_doh is False.
+    "network.custom_dns": "auto",
 }
 
 
