@@ -74,7 +74,20 @@ def _to_shelfmark_filters(filters: SearchFilters, media_type: MediaType) -> Any:
         "mediatype": _ia_mediatype_to_shelfmark(media_type),
     }
     if filters.languages:
-        kwargs["lang"] = filters.languages
+        # AA's search endpoint expects ISO 639-1 two-letter codes
+        # (&lang=fr, not &lang=fra). Normalize the user-supplied codes
+        # — accepts "fr", "fra", "fre", "french", "FR-FR", etc. — so
+        # whatever the profile carries gets translated to something
+        # AA actually recognises. Drops codes we can't map.
+        from grabarr.api.torznab import _normalize_language
+
+        normalized: list[str] = []
+        for raw in filters.languages:
+            v = _normalize_language(raw)
+            if v and v not in normalized:
+                normalized.append(v)
+        if normalized:
+            kwargs["lang"] = normalized
     if filters.preferred_formats:
         kwargs["format"] = filters.preferred_formats
     if filters.min_year is not None:
