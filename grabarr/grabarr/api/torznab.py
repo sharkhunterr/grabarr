@@ -141,13 +141,13 @@ def _normalize_language(lang: str | None) -> str | None:
     return key[:2] if len(key) >= 2 else None
 
 
-# Short display labels for the source tag appended to release titles.
-# Using short codes so Readarr/Sonarr release parsers that strip known
-# format tags don't choke on extra-long brackets.
+# Display labels for the [SOURCE] tag prepended to release titles.
+# Spelled out rather than abbreviated so the operator sees the source
+# at a glance without having to remember acronyms.
 _SOURCE_LABEL: dict[str, str] = {
-    "anna_archive": "AA",
+    "anna_archive": "Anna Archive",
     "libgen": "LibGen",
-    "internet_archive": "IA",
+    "internet_archive": "Internet Archive",
     "zlibrary": "Z-Lib",
     "welib": "Welib",
 }
@@ -156,12 +156,13 @@ _SOURCE_LABEL: dict[str, str] = {
 def _build_release_title(r: Any) -> str:  # noqa: ANN401
     """Scene-style title so Bookshelf / Readarr parsers succeed.
 
-    Format: ``{Author} - {Title} ({year}) [FORMAT] [SOURCE]`` with
-    reasonable fallbacks for each missing field. The trailing
+    Format: ``[SOURCE] {Author} - {Title} ({year}) [FORMAT]`` with
+    reasonable fallbacks for each missing field. The leading
     ``[SOURCE]`` tag lets the operator see at-a-glance which adapter
     served a given result (AA / LibGen / IA / Z-Lib / Welib) — useful
     to pick a release less likely to hit CF-bypass-only download paths.
     """
+    source_label = _SOURCE_LABEL.get(r.source_id, r.source_id)
     parts: list[str] = []
     if r.author:
         parts.append(str(r.author).strip())
@@ -171,9 +172,7 @@ def _build_release_title(r: Any) -> str:  # noqa: ANN401
         out += f" ({r.year})"
     if r.format and r.format != "?":
         out += f" [{r.format.upper()}]"
-    source_label = _SOURCE_LABEL.get(r.source_id, r.source_id)
-    out += f" [{source_label}]"
-    return out
+    return f"[{source_label}] {out}"
 
 
 def _pseudo_info_hash(profile_slug: str, source_id: str, external_id: str) -> str:
