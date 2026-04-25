@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [1.1.3](https://github.com/sharkhunterr/grabarr/-/compare/v1.1.2...v1.1.3) (2026-04-25)
+
+
+### Bug Fixes
+
+* **ci:** drop image.tar artifact from build:docker ([42e68bb](https://github.com/sharkhunterr/grabarr/-/commit/42e68bb714464df9acab92905bee165e8000c2e9))
+
 ### [1.1.2](https://github.com/sharkhunterr/grabarr/-/compare/v1.1.1...v1.1.2) (2026-04-25)
 
 
