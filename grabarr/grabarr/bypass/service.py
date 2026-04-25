@@ -148,3 +148,81 @@ async def _solve_internal(url: str, timeout: int) -> BypassResult:
         cookie = ""
         ua = ""
     return BypassResult(cf_clearance=cookie, user_agent=ua, mode_used=BypassMode.INTERNAL)
+
+
+# --------------------------------------------------------------------------
+# fetch_html — let any adapter pull a CF/Turnstile-protected page
+# --------------------------------------------------------------------------
+
+
+async def fetch_html(
+    url: str,
+    *,
+    prefer_internal: bool = False,
+    timeout: int = 60,
+) -> str:
+    """Return the rendered HTML of ``url`` after running through the bypass.
+
+    Vendored ``internal_bypasser.get(url)`` (SeleniumBase cdp_driver) and
+    ``external_bypasser.get_bypassed_page(url)`` (FlareSolverr) both
+    return the post-challenge HTML as a plain string. This wrapper picks
+    one based on the configured bypass.mode, falling back across modes
+    when ``mode == auto``.
+
+    Adapters that scrape Cloudflare-protected pages (RomsFun,
+    hShop's Turnstile-gated download page, etc.) call this to acquire
+    the rendered HTML, then parse it with BeautifulSoup as if no
+    challenge was present.
+
+    ``prefer_internal=True`` flips the auto-mode order to (internal,
+    external) — useful for sites with Cloudflare Turnstile, which
+    FlareSolverr does not solve but a real Chromium often does.
+
+    Raises ``AdapterBypassError`` if every configured mode fails.
+    """
+    import asyncio
+
+    mode = resolve_mode()
+    order: list[BypassMode]
+    if mode == BypassMode.AUTO:
+        order = (
+            [BypassMode.INTERNAL, BypassMode.EXTERNAL]
+            if prefer_internal
+            else [BypassMode.EXTERNAL, BypassMode.INTERNAL]
+        )
+    else:
+        order = [mode]
+
+    last_exc: Exception | None = None
+    for attempt in order:
+        try:
+            if attempt == BypassMode.EXTERNAL:
+                from grabarr.vendor.shelfmark.bypass import external_bypasser
+
+                fn = external_bypasser.get_bypassed_page
+                html = await asyncio.to_thread(fn, url)
+            elif attempt == BypassMode.INTERNAL:
+                try:
+                    from grabarr.vendor.shelfmark.bypass import internal_bypasser
+                except ImportError as exc:
+                    raise AdapterBypassError(
+                        "internal bypasser requires the 'internal-bypasser' "
+                        "extra: `uv sync --extra internal-bypasser`"
+                    ) from exc
+                html = await asyncio.to_thread(internal_bypasser.get, url)
+            else:
+                continue
+            if html:
+                _log.info("bypass.fetch_html: %s mode succeeded for %s", attempt.value, url)
+                return html
+            _log.info("bypass.fetch_html: %s mode returned empty for %s", attempt.value, url)
+        except Exception as exc:  # noqa: BLE001
+            last_exc = exc
+            _log.warning(
+                "bypass.fetch_html: %s mode raised for %s: %s", attempt.value, url, exc
+            )
+            continue
+
+    raise AdapterBypassError(
+        f"fetch_html failed for {url} (last error: {last_exc})"
+    ) from last_exc
