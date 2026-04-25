@@ -150,6 +150,8 @@ _SOURCE_LABEL: dict[str, str] = {
     "internet_archive": "Internet Archive",
     "zlibrary": "Z-Lib",
     "welib": "Welib",
+    "vimm": "Vimm's Lair",
+    "edge_emulation": "Edge Emulation",
 }
 
 

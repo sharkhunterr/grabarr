@@ -22,7 +22,6 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
-from sqlalchemy import select
 
 from grabarr import __version__
 from grabarr.api.admin import router as admin_router
@@ -34,7 +33,6 @@ from grabarr.web.routes import mount_static, router as web_router
 from grabarr.core.config import install_shelfmark_bridge, load_settings
 from grabarr.core.logging import configure_root, setup_logger
 from grabarr.db.session import close_engine, session_scope
-from grabarr.profiles.models import Profile
 
 _log = setup_logger(__name__)
 
@@ -197,14 +195,14 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # 3. Run migrations.
     _log.info("running Alembic migrations")
     await _run_migrations()
-    # 4. Seed defaults if empty.
-    async with session_scope() as session:
-        existing = await session.execute(select(Profile.slug).limit(1))
-        if existing.scalar_one_or_none() is None:
-            from grabarr.cli.seed_defaults import seed_defaults
+    # 4. Seed any missing default profiles. seed_defaults is idempotent
+    #    by slug — running it on every boot lets new defaults added in a
+    #    later release land on existing installs without manual import.
+    from grabarr.cli.seed_defaults import seed_defaults
 
-            slugs = await seed_defaults()
-            _log.info("seeded %d default profiles", len(slugs))
+    slugs = await seed_defaults()
+    if slugs:
+        _log.info("seeded %d default profiles: %s", len(slugs), ", ".join(slugs))
     # 5. Warm the sync settings cache, then bridge Shelfmark vendored code.
     from grabarr.core.settings_service import load_cache as load_settings_cache
 

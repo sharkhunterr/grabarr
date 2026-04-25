@@ -88,23 +88,22 @@ DEFAULT_PROFILES: list[dict[str, Any]] = [
     },
     {
         "slug": "roms_all",
-        "name": "ROMs — All Platforms",
-        "description": "Game ROMs from Internet Archive collections.",
+        "name": "ROMs — All Sources",
+        "description": (
+            "Single ROM profile aggregating every ROM-capable adapter: "
+            "Vimm's Lair (curated retro), Edge Emulation (wide multi-"
+            "platform), Internet Archive (romsets + arcade collections). "
+            "Pin a system via extra_query_terms (e.g. system:N64 for "
+            "Vimm, system:nintendo-snes for Edge)."
+        ),
         "media_type": MediaType.GAME_ROM.value,
         "sources": [
-            _src("internet_archive", 1.0, timeout=90),
+            _src("vimm", 1.2),
+            _src("edge_emulation", 1.0),
+            _src("internet_archive", 0.8, timeout=90),
         ],
-        # internetarcade alone is the Arcade games collection — misses
-        # NES/SNES/Game Boy/MS-DOS titles. Widen to the main ROM
-        # collections so "super mario" etc. actually hit something.
-        "filters": _filters(extra_query_terms=(
-            "(collection:internetarcade "
-            "OR collection:consolelivingroom "
-            "OR collection:nintendoentertainmentsystem "
-            "OR collection:softwarelibrary_msdos_games "
-            "OR collection:gameboy_library)"
-        )),
-        "mode": ProfileMode.FIRST_MATCH.value,
+        "filters": _filters(),
+        "mode": ProfileMode.AGGREGATE_ALL.value,
         "newznab_categories": [1070],
     },
     {
