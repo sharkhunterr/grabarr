@@ -184,12 +184,14 @@ async def fetch_html(
 
     mode = resolve_mode()
     order: list[BypassMode]
-    if mode == BypassMode.AUTO:
-        order = (
-            [BypassMode.INTERNAL, BypassMode.EXTERNAL]
-            if prefer_internal
-            else [BypassMode.EXTERNAL, BypassMode.INTERNAL]
-        )
+    if prefer_internal:
+        # Site asked for internal-first (e.g. Cloudflare Turnstile or any
+        # detection that JS challenge solvers can't handle). Honour it
+        # regardless of bypass.mode — internal first, then external as a
+        # graceful fallback if internal isn't installed.
+        order = [BypassMode.INTERNAL, BypassMode.EXTERNAL]
+    elif mode == BypassMode.AUTO:
+        order = [BypassMode.EXTERNAL, BypassMode.INTERNAL]
     else:
         order = [mode]
 

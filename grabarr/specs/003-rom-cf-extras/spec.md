@@ -95,3 +95,52 @@ Ship `bypass.service.fetch_html()` so future work can land cheaply,
 keep the four sites in the deferred list of feature 002's spec, and
 defer the click-driver pipeline to a dedicated PR if/when it's worth
 the maintenance burden.
+
+## Update — branch `rom-click-driver` follow-up (2026-04-25)
+
+A second pass landed `bypass.click_driver.click_and_capture(url, *,
+button_text, button_selector, wait_for_url_pattern, timeout)` — a real
+Chromium driven via the vendored SeleniumBase ``cdp_driver``, listening
+on the CDP ``Browser.downloadWillBegin`` event. The intent was to
+implement a working RomsFun adapter on top of it.
+
+**RomsFun bottoming-out**: hours of probing showed RomsFun's flow does
+NOT actually need a click handler — every URL is in static HTML, in
+3 hops:
+
+1. ``/?s=<q>``                       → search results (anchors to detail).
+2. ``/roms/<console>/<slug>.html``  → exposes ``/download/<slug>-<id>``.
+3. ``/download/<slug>-<id>``        → exposes ``/download/<slug>-<id>/<n>``.
+4. ``/download/<slug>-<id>/<n>``    → contains
+   ``<a id="download-link" href="https://sto.romsfast.com/...?token=…">``.
+
+The CDN-signed URL (``sto.romsfast.com``) is right there in the HTML.
+The implementation extracted it correctly. **But the actual file fetch
+returns 403** with body "Sorry, your request is invalid" — every
+combination of (User-Agent, Referer, Accept-* sec-fetch headers) fails.
+Even the same token fetched twice in a row from a fresh bypass session
+doesn't work for httpx. The token is presumably tied to:
+
+- An HTTP-only session cookie set by the per-file landing page that we
+  can't extract (cookies aren't in the bypasser's exposed cookie jar).
+- A short IP-validity window the CDN tracks server-side.
+- A WebGL/canvas browser fingerprint Cloudflare sometimes layers in.
+
+To actually download from RomsFun we'd need to drive the **bytes** of
+the file inside the same Chromium session — i.e. let the browser do
+``GET signed-url`` itself, capturing the file from its download
+folder. The cdp_driver supports this (``Tab.set_download_path()`` +
+``Tab.download_file()``), but it's a different design from the
+current grabarr download manager (which expects an HTTP URL it can
+fetch with httpx). Wiring this is a bigger refactor than expected.
+
+The **click_and_capture** infrastructure remains in the codebase as
+a generic helper for any future site whose URL extraction genuinely
+needs JS click execution (hShop's Turnstile-gated download box, for
+example, *might* benefit if Turnstile starts auto-passing under
+SeleniumBase). The unused RomsFun adapter was reverted.
+
+**Net result of the branch**: shipping the `click_and_capture` helper
++ the `prefer_internal=True` honoring in `fetch_html`. No new working
+adapters. RomsFun, hShop, CDRomance, MyAbandonware all need
+browser-driven byte downloads — a feature 004 if it's worth it.
