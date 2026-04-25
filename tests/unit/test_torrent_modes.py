@@ -33,7 +33,11 @@ def test_webseed_mode_emits_bep19_url_list(tmp_path: Path, seed_file: Path) -> N
 
     t = decode(result.bencoded)
     assert t[b"announce"] == b"http://tracker.local/announce"
-    assert t[b"url-list"] == [b"http://grabarr.local/seed/abc"]
+    # webseed.py emits url-list as a bare string (not a 1-element list) for
+    # qBittorrent/Transmission compatibility — see the WHY comment in
+    # grabarr/torrents/webseed.py.
+    assert t[b"url-list"] == b"http://grabarr.local/seed/abc"
+    assert t[b"httpseeds"] == [b"http://grabarr.local/seed/abc"]
     info = t[b"info"]
     assert info[b"length"] == seed_file.stat().st_size
     assert info[b"name"] == b"Sample.epub"

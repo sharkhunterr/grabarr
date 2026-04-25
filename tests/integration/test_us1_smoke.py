@@ -65,6 +65,10 @@ def app_client(tmp_path, monkeypatch):
     monkeypatch.setenv("GRABARR_SERVER__DOWNLOADS_DIR", str(tmp_path / "downloads"))
     # Default these tests to webseed so the BEP-19 url-list assertions hold.
     # The active_seed path is covered by tests/unit/test_torrent_modes.py.
+    # NOTE: setting GRABARR_TORRENT_MODE alone is not enough — the resolver
+    # in downloads/service.py reads settings_service._cache first, which is
+    # seeded from _DEFAULTS (active_seed). We force the cache below after the
+    # lifespan has populated it.
     monkeypatch.setenv("GRABARR_TORRENT_MODE", "webseed")
     (tmp_path / "data").mkdir()
     (tmp_path / "downloads" / "incoming").mkdir(parents=True)
@@ -73,6 +77,7 @@ def app_client(tmp_path, monkeypatch):
     # Reset cached state from any prior test (but keep the registry —
     # adapter classes are module-level and don't re-register on reload).
     from grabarr.core import config as config_module
+    from grabarr.core import settings_service
     from grabarr.db import session as session_module
     from grabarr.profiles import service as profiles_service
 
@@ -87,6 +92,10 @@ def app_client(tmp_path, monkeypatch):
 
     app = create_app()
     with TestClient(app) as client:
+        # Lifespan ran load_cache(); now flip torrent.mode to webseed for
+        # this fixture. Direct cache write is fine — it's the same path the
+        # settings PATCH endpoint uses post-write.
+        settings_service._cache["torrent.mode"] = "webseed"
         yield client
 
     session_module.reset_engine()
@@ -160,8 +169,12 @@ def test_us1_full_flow(app_client: TestClient) -> None:
     info = torrent[b"info"]
     assert info[b"length"] == len(_FAKE_EPUB)
     assert info[b"name"].endswith(b".epub")
-    # The webseed URL must point back at our own server.
+    # The webseed URL must point back at our own server. url-list can be
+    # either a bare bytes string or a list of bytes per BEP-19 — Grabarr
+    # emits the bare-string form (see torrents/webseed.py).
     webseeds = torrent[b"url-list"]
+    if isinstance(webseeds, bytes):
+        webseeds = [webseeds]
     assert any(b"/torznab/ebooks_public_domain/seed/" in w for w in webseeds)
 
 
