@@ -222,11 +222,19 @@ def _build_search_rss(
         size = r.size_bytes or 0
         download_url = f"{base_url}/download/{quote(token)}.torrent"
 
-        # pubDate drives "Age" column. Use the item's year when known
-        # (Jan 1 UTC); fall back to "now".
+        # pubDate drives Prowlarr's "Age" column. Use the item's year
+        # when known (Jan 1 UTC). For GAME_ROM without a year fall back
+        # to a vintage default (2000-01-01) so retro hits don't show as
+        # "0 minute" ages — Vimm's listing rarely exposes a year, Edge
+        # never does, and "today" would lie. For other media types we
+        # keep "now" since new ebook releases are plausible.
         if r.year and 1000 <= r.year <= 9999:
             pub_date = format_datetime(
                 dt.datetime(r.year, 1, 1, 0, 0, 0, tzinfo=dt.UTC)
+            )
+        elif r.media_type.value == "game_rom":
+            pub_date = format_datetime(
+                dt.datetime(2000, 1, 1, 0, 0, 0, tzinfo=dt.UTC)
             )
         else:
             pub_date = format_datetime(dt.datetime.now(dt.UTC))

@@ -61,6 +61,9 @@ def test_vimm_parses_list_table() -> None:
     assert rows[0].format == "nes"
     # Pirate rows are score-penalised.
     assert rows[2].quality_score < rows[1].quality_score
+    # _TYPICAL_SIZE placeholder so Prowlarr doesn't render 0 B.
+    assert rows[0].size_bytes and rows[0].size_bytes > 0
+    assert rows[0].metadata.get("size_is_estimate") is True
 
 
 def test_vimm_parses_list_respects_limit() -> None:

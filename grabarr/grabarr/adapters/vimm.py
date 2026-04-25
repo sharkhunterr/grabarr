@@ -135,6 +135,52 @@ _REGION_LANG: dict[str, str] = {
     "Russia": "ru",
 }
 
+# Approximate uncompressed cartridge / disc size per system, in bytes.
+# Used as a search-time placeholder for size_bytes — Vimm's listing
+# page doesn't expose actual file size, only the per-game page does
+# (via the JS media[] array's `Zipped` field). Fetching every per-game
+# page during search would multiply HTTP calls by N results, so we
+# settle for a reasonable median that stops Prowlarr/Bookshelf from
+# rendering "0 B". The DownloadInfo from get_download_info carries the
+# real size and the Download row gets corrected post-fetch.
+_TYPICAL_SIZE: dict[str, int] = {
+    "NES": 256 * 1024,             # ~256 KB
+    "SNES": 1 * 1024 ** 2,         # ~1 MB
+    "N64": 16 * 1024 ** 2,         # ~16 MB
+    "GameCube": 1400 * 1024 ** 2,  # ~1.4 GB DVD
+    "Wii": 4400 * 1024 ** 2,       # ~4.4 GB
+    "WiiWare": 32 * 1024 ** 2,     # ~32 MB
+    "GB": 256 * 1024,
+    "GBC": 512 * 1024,
+    "GBA": 16 * 1024 ** 2,
+    "VB": 1 * 1024 ** 2,
+    "DS": 64 * 1024 ** 2,
+    "3DS": 1024 * 1024 ** 2,
+    "SMS": 256 * 1024,
+    "Genesis": 1 * 1024 ** 2,
+    "GG": 256 * 1024,
+    "32X": 2 * 1024 ** 2,
+    "SegaCD": 600 * 1024 ** 2,
+    "Saturn": 600 * 1024 ** 2,
+    "Dreamcast": 1024 * 1024 ** 2,
+    "TG16": 512 * 1024,
+    "TGCD": 600 * 1024 ** 2,
+    "PS1": 600 * 1024 ** 2,
+    "PS2": 4400 * 1024 ** 2,
+    "PS3": 25 * 1024 ** 3,
+    "PSP": 1700 * 1024 ** 2,
+    "Xbox": 4400 * 1024 ** 2,
+    "Xbox360": 8 * 1024 ** 3,
+    "X360-D": 8 * 1024 ** 3,
+    "Atari2600": 32 * 1024,
+    "Atari5200": 32 * 1024,
+    "Atari7800": 64 * 1024,
+    "Lynx": 256 * 1024,
+    "Jaguar": 4 * 1024 ** 2,
+    "JaguarCD": 600 * 1024 ** 2,
+    "CDi": 600 * 1024 ** 2,
+}
+
 # Format hint per Vimm system. Vimm doesn't expose the file extension
 # in the search list — we know it from the system.
 _SYSTEM_FORMAT: dict[str, str] = {
@@ -461,11 +507,15 @@ def _parse_vimm_list(
 
     Each row is a <tr> with the first <a href="/vault/<id>"> as title,
     flag <img title="REGION"> for region, plain text for version + lang.
+    The third column holds the version (``1.0``, ``1.1``, …) for most
+    rows OR a release date (``1990-04-27``) for prototypes/dated dumps.
+    We try to extract a year from the latter.
     """
     soup = BeautifulSoup(html, "lxml")
     out: list[SearchResult] = []
     sys_label = _VIMM_SYSTEMS.get(system, system)
     fmt_hint = _SYSTEM_FORMAT.get(system, "rom")
+    typical_size = _TYPICAL_SIZE.get(system)
     for row in soup.select("tr"):
         link = row.find("a", href=re.compile(r"^/vault/\d+$"))
         if not link:
@@ -493,6 +543,18 @@ def _parse_vimm_list(
             language = _REGION_LANG.get(region)
             if language:
                 break
+        # Year: parse the 3rd column. Either a version ("1.0") or a date
+        # ("1990-04-27"). We extract a year only when the cell looks
+        # like a date or a bare 4-digit year.
+        year: int | None = None
+        cells = row.find_all("td")
+        if len(cells) >= 3:
+            third = cells[2].get_text(strip=True)
+            year_match = re.match(r"^(\d{4})(?:-\d{2}-\d{2})?$", third)
+            if year_match:
+                y = int(year_match.group(1))
+                if 1970 <= y <= 2099:
+                    year = y
         # Quality score: substring match boosts the row.
         score = 50.0
         if query.lower() in title.lower():
@@ -504,10 +566,13 @@ def _parse_vimm_list(
                 external_id=external_id,
                 title=f"{title} [{system}]",
                 author=None,
-                year=None,
+                year=year,
                 format=fmt_hint,
                 language=language,
-                size_bytes=None,
+                # _TYPICAL_SIZE lookup so Prowlarr / Bookshelf don't
+                # render "0 B"; the real size lands on the Download row
+                # after get_download_info pulls the media[] entry.
+                size_bytes=typical_size,
                 quality_score=score,
                 source_id=source_id,
                 media_type=MediaType.GAME_ROM,
@@ -515,6 +580,7 @@ def _parse_vimm_list(
                     "vimm_system": system,
                     "vimm_system_label": sys_label,
                     "vimm_regions": regions,
+                    "size_is_estimate": True,
                 },
             )
         )
