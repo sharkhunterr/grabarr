@@ -103,3 +103,88 @@ async def test_ia_get_download_info_no_query_hint_falls_back_to_format() -> None
         )
         info = await adapter.get_download_info("big_pack", MediaType.GAME_ROM)
     assert info.filename_hint.endswith(".zip")
+
+
+# --------------------------------------------------------------------------
+# IA login + access-restricted filter
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_ia_search_drops_access_restricted_filter_when_logged_in() -> None:
+    """With credentials configured, search must NOT filter out CDL items."""
+    adapter = InternetArchiveAdapter(login_email="x@y", login_password="pw")
+    captured_q: list[str] = []
+
+    def _capture(request: httpx.Request) -> httpx.Response:
+        captured_q.append(request.url.params.get("q") or "")
+        return httpx.Response(200, json={"response": {"docs": []}})
+
+    with respx.mock(assert_all_called=False) as mock:
+        # Stub the login endpoint so _ensure_logged_in succeeds.
+        mock.post("https://archive.org/services/xauthn/").mock(
+            return_value=httpx.Response(
+                200, headers={"set-cookie": "logged-in-user=x; Path=/"}
+            )
+        )
+        mock.get("https://archive.org/advancedsearch.php").mock(side_effect=_capture)
+        from grabarr.core.models import SearchFilters
+
+        await adapter.search("mario", MediaType.GAME_ROM, SearchFilters(), limit=5)
+    assert captured_q, "search should have hit advancedsearch.php"
+    assert "-access-restricted-item:true" not in captured_q[0]
+
+
+@pytest.mark.asyncio
+async def test_ia_search_keeps_access_restricted_filter_when_anonymous() -> None:
+    """Without credentials, the v1.0 access-restricted filter still applies."""
+    adapter = InternetArchiveAdapter()  # no login
+    captured_q: list[str] = []
+
+    def _capture(request: httpx.Request) -> httpx.Response:
+        captured_q.append(request.url.params.get("q") or "")
+        return httpx.Response(200, json={"response": {"docs": []}})
+
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get("https://archive.org/advancedsearch.php").mock(side_effect=_capture)
+        from grabarr.core.models import SearchFilters
+
+        await adapter.search("mario", MediaType.GAME_ROM, SearchFilters(), limit=5)
+    assert captured_q
+    assert "-access-restricted-item:true" in captured_q[0]
+
+
+@pytest.mark.asyncio
+async def test_ia_login_caches_cookies_on_first_call() -> None:
+    """_ensure_logged_in is single-flight + cached for subsequent calls."""
+    adapter = InternetArchiveAdapter(login_email="x@y", login_password="pw")
+    login_count = 0
+
+    def _login(_request: httpx.Request) -> httpx.Response:
+        nonlocal login_count
+        login_count += 1
+        return httpx.Response(
+            200, headers={"set-cookie": "logged-in-user=x; Path=/"}
+        )
+
+    with respx.mock(assert_all_called=False) as mock:
+        mock.post("https://archive.org/services/xauthn/").mock(side_effect=_login)
+        await adapter._ensure_logged_in()
+        await adapter._ensure_logged_in()
+        await adapter._ensure_logged_in()
+    assert login_count == 1
+    assert adapter._auth_cookies and "logged-in-user" in adapter._auth_cookies
+
+
+def test_ia_drop_auth_on_401_clears_cache() -> None:
+    adapter = InternetArchiveAdapter(login_email="x@y", login_password="pw")
+    adapter._auth_cookies = {"logged-in-user": "x"}
+    adapter._drop_auth_on_401(401)
+    assert adapter._auth_cookies is None
+
+
+def test_ia_drop_auth_ignores_non_401() -> None:
+    adapter = InternetArchiveAdapter(login_email="x@y", login_password="pw")
+    adapter._auth_cookies = {"logged-in-user": "x"}
+    adapter._drop_auth_on_401(500)
+    assert adapter._auth_cookies == {"logged-in-user": "x"}

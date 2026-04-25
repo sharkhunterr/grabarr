@@ -235,9 +235,27 @@ def get_adapter_instance(source_id: str) -> SourceAdapter | None:
     if cls is InternetArchiveAdapter:
         import os
 
-        contact = os.environ.get("GRABARR_IA_CONTACT_EMAIL", "")
-        suffix = os.environ.get("GRABARR_IA_UA_SUFFIX", "")
-        instance = cls(contact_email=contact, user_agent_suffix=suffix)  # type: ignore[call-arg]
+        from grabarr.core.settings_service import get_sync
+
+        contact = os.environ.get("GRABARR_IA_CONTACT_EMAIL", "") or (
+            get_sync("sources.internet_archive.contact_email", "") or ""
+        )
+        suffix = os.environ.get("GRABARR_IA_UA_SUFFIX", "") or (
+            get_sync("sources.internet_archive.user_agent_suffix", "") or ""
+        )
+        # Optional account login: env var > settings table > empty.
+        login_email = os.environ.get("GRABARR_IA_LOGIN_EMAIL", "") or (
+            get_sync("sources.internet_archive.login_email", "") or ""
+        )
+        login_password = os.environ.get("GRABARR_IA_LOGIN_PASSWORD", "") or (
+            get_sync("sources.internet_archive.login_password", "") or ""
+        )
+        instance = cls(  # type: ignore[call-arg]
+            contact_email=contact,
+            user_agent_suffix=suffix,
+            login_email=login_email,
+            login_password=login_password,
+        )
     else:
         try:
             instance = cls()  # type: ignore[call-arg]

@@ -10,6 +10,7 @@ File-selection rubric is a per-MediaType preference ladder (research §R-4).
 
 from __future__ import annotations
 
+import asyncio
 import datetime as dt
 from dataclasses import dataclass
 from typing import Any
@@ -216,11 +217,23 @@ class InternetArchiveAdapter:
     }
     requires_cf_bypass = False
     supports_member_key = False
-    supports_authentication = False
+    supports_authentication = True  # optional login/password — see __init__
 
-    def __init__(self, contact_email: str = "", user_agent_suffix: str = "") -> None:
+    def __init__(
+        self,
+        contact_email: str = "",
+        user_agent_suffix: str = "",
+        login_email: str = "",
+        login_password: str = "",
+    ) -> None:
         self._contact_email = contact_email
         self._ua_suffix = user_agent_suffix
+        self._login_email = login_email
+        self._login_password = login_password
+        # Cached auth cookies after a successful login. Populated lazily on
+        # first authenticated request; cleared on 401/403 to force a relogin.
+        self._auth_cookies: dict[str, str] | None = None
+        self._login_lock = asyncio.Lock()
         # Default-configure the bucket; actual limits come from settings later.
         rate_limiter.configure(self.id, "search", per_minute=30)
         rate_limiter.configure(self.id, "download", per_minute=30)
@@ -239,7 +252,88 @@ class InternetArchiveAdapter:
         return httpx.AsyncClient(
             timeout=httpx.Timeout(connect=10.0, read=30.0, write=30.0, pool=30.0),
             headers={"User-Agent": self._user_agent()},
+            cookies=self._auth_cookies or None,
         )
+
+    # ---- login flow ----------------------------------------------------
+
+    async def _ensure_logged_in(self) -> None:
+        """Acquire IA auth cookies if credentials are configured.
+
+        Idempotent: subsequent calls are no-ops while the cached cookies
+        are still in place. Single-flight via ``_login_lock`` so a flurry
+        of concurrent searches won't trigger N parallel logins.
+        """
+        if not self._login_email or not self._login_password:
+            return
+        if self._auth_cookies:
+            return
+        async with self._login_lock:
+            if self._auth_cookies:
+                return
+            self._auth_cookies = await self._do_login()
+
+    async def _do_login(self) -> dict[str, str]:
+        """POST credentials to IA's xauthn login endpoint, return cookies.
+
+        IA exposes a JSON authn endpoint at /services/xauthn/?op=login
+        that accepts form-encoded ``email`` + ``password`` and returns
+        the session cookies (``logged-in-user`` / ``logged-in-sig``)
+        in Set-Cookie. Falls back to the legacy /account/login form on
+        non-2xx (some IA mirrors only expose the form path).
+        """
+        login_url = f"{_IA_BASE}/services/xauthn/?op=login"
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(connect=10.0, read=30.0, write=30.0, pool=30.0),
+            headers={"User-Agent": self._user_agent()},
+            follow_redirects=True,
+        ) as client:
+            try:
+                r = await client.post(
+                    login_url,
+                    data={
+                        "email": self._login_email,
+                        "password": self._login_password,
+                    },
+                )
+            except httpx.HTTPError as exc:
+                _log.warning("IA login: xauthn POST failed: %s", exc)
+                raise AdapterConnectivityError(f"IA login failed: {exc}") from exc
+            cookies = {k: v for k, v in r.cookies.items() if "logged-in" in k}
+            if r.status_code != 200 or not cookies:
+                # Legacy fallback — old /account/login form.
+                try:
+                    r2 = await client.post(
+                        f"{_IA_BASE}/account/login",
+                        data={
+                            "username": self._login_email,
+                            "password": self._login_password,
+                            "remember": "true",
+                        },
+                    )
+                except httpx.HTTPError as exc:
+                    raise AdapterConnectivityError(
+                        f"IA login fallback failed: {exc}"
+                    ) from exc
+                cookies = {k: v for k, v in r2.cookies.items() if "logged-in" in k}
+            if not cookies:
+                _log.warning(
+                    "IA login: no logged-in-* cookies returned (HTTP %d). "
+                    "Check sources.internet_archive.login_email + .login_password.",
+                    r.status_code,
+                )
+                # Don't raise — IA still works anonymously. The operator
+                # gets a degraded experience (access-restricted items
+                # won't load) but searches still succeed.
+                return {}
+        _log.info("IA login: authenticated as %s", self._login_email)
+        return cookies
+
+    def _drop_auth_on_401(self, status_code: int) -> None:
+        """Force a relogin on the next call if the server rejected our cookies."""
+        if status_code in (401, 403) and self._auth_cookies:
+            _log.info("IA login: cookies expired (HTTP %d), will relogin", status_code)
+            self._auth_cookies = None
 
     # ---- primary API ---------------------------------------------------
 
@@ -251,9 +345,13 @@ class InternetArchiveAdapter:
         limit: int = 50,
     ) -> list[SearchResult]:
         await rate_limiter.acquire(self.id, "search")
+        await self._ensure_logged_in()
         q_parts = [query, f"mediatype:{_media_type_to_ia_query(media_type)}"]
-        # Filter CDL-restricted items per spec FR-1.4.
-        q_parts.append("-access-restricted-item:true")
+        # Anonymous callers can't fetch CDL-restricted items, so we hide
+        # them from search to avoid grab-time 403s. With login credentials
+        # configured those items become reachable, so we surface them.
+        if not (self._login_email and self._login_password):
+            q_parts.append("-access-restricted-item:true")
         if filters.min_year is not None:
             q_parts.append(f"year:[{filters.min_year} TO 9999]")
         if filters.max_year is not None:
@@ -283,6 +381,7 @@ class InternetArchiveAdapter:
                 r.raise_for_status()
                 data = r.json()
         except httpx.HTTPStatusError as exc:
+            self._drop_auth_on_401(exc.response.status_code)
             if 500 <= exc.response.status_code < 600:
                 raise AdapterServerError(f"IA advancedsearch returned {exc.response.status_code}") from exc
             raise AdapterConnectivityError(str(exc)) from exc
@@ -335,12 +434,14 @@ class InternetArchiveAdapter:
         query_hint: str | None = None,
     ) -> DownloadInfo:
         await rate_limiter.acquire(self.id, "download")
+        await self._ensure_logged_in()
         try:
             async with self._client() as client:
                 r = await client.get(f"{_IA_BASE}/metadata/{external_id}")
                 r.raise_for_status()
                 meta = r.json()
         except httpx.HTTPStatusError as exc:
+            self._drop_auth_on_401(exc.response.status_code)
             if exc.response.status_code == 404:
                 raise AdapterNotFound(external_id) from exc
             if 500 <= exc.response.status_code < 600:
@@ -408,12 +509,19 @@ class InternetArchiveAdapter:
         if raw_size and str(raw_size).isdigit():
             size_bytes = int(raw_size)
 
+        # Carry auth cookies on the download HTTP call too — required
+        # for items behind access-restricted-item:true (CDL borrows etc.).
+        headers = {"User-Agent": self._user_agent()}
+        if self._auth_cookies:
+            headers["Cookie"] = "; ".join(
+                f"{k}={v}" for k, v in self._auth_cookies.items()
+            )
         return DownloadInfo(
             download_url=url,
             size_bytes=size_bytes,
             content_type=entry.get("format"),
             filename_hint=name,
-            extra_headers={"User-Agent": self._user_agent()},
+            extra_headers=headers,
         )
 
     async def health_check(self) -> HealthStatus:
@@ -466,6 +574,29 @@ class InternetArchiveAdapter:
                     secret=False,
                     required=False,
                     help_text="Optional extra suffix appended to every request's UA.",
+                ),
+                ConfigField(
+                    key="sources.internet_archive.login_email",
+                    label="IA account e-mail (optional)",
+                    field_type="text",
+                    options=None,
+                    secret=False,
+                    required=False,
+                    help_text=(
+                        "When set with the matching password, Grabarr logs in "
+                        "to archive.org and surfaces access-restricted items "
+                        "(CDL borrows, etc.) in search. Anonymous access "
+                        "still works — leave both blank to skip login."
+                    ),
+                ),
+                ConfigField(
+                    key="sources.internet_archive.login_password",
+                    label="IA account password (optional)",
+                    field_type="password",
+                    options=None,
+                    secret=True,
+                    required=False,
+                    help_text="Paired with login_email. Stored encrypted at rest.",
                 ),
             ]
         )
