@@ -165,6 +165,7 @@ _SOURCE_LABEL: dict[str, str] = {
     "welib": "Welib",
     "vimm": "Vimm's Lair",
     "edge_emulation": "Edge Emulation",
+    "romsfun": "RomsFun",
 }
 
 

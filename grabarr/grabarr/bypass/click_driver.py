@@ -76,6 +76,160 @@ class ClickCapture:
     user_agent: str
 
 
+@dataclass(frozen=True, slots=True)
+class SessionResult:
+    """Result of ``fetch_session`` — full browser session export.
+
+    Returned for sites whose download URL is gated by an HTTP-only
+    cookie set during the page load. The caller forwards ``cookies``
+    on the subsequent file fetch so the CDN accepts the request.
+    """
+
+    html: str
+    cookies: dict[str, str]
+    user_agent: str
+    final_url: str  # URL after any client-side redirects
+
+
+def fetch_session(
+    url: str,
+    *,
+    settle_seconds: float = 2.0,
+    wait_until_visible: str | None = None,
+    wait_until_visible_timeout: int = 30,
+    timeout: int = 60,
+) -> SessionResult:
+    """Sync entry point — boot Chromium, navigate, snapshot HTML + cookies + UA.
+
+    Use this when a site's download URL is gated by something that
+    can only be obtained from a real browser session — typically:
+
+    - An HTTP-only cookie set during navigation that gates the CDN.
+    - A JS countdown that REWRITES the link's ``href`` after N seconds
+      (RomsFun's pattern: initial HTML carries a fake token; real
+      token arrives ~7 s later when the countdown unhides the
+      ``#download-button`` and updates ``#download-link`` ).
+
+    ``wait_until_visible`` is a CSS selector. When set, this function
+    polls the element until its ``class`` list no longer contains
+    ``hidden`` (Tailwind utility) — at which point any deferred-token
+    JS has already run, and the page state is "ready". If the selector
+    never reveals within ``wait_until_visible_timeout``, we proceed
+    anyway and the caller decides whether to fail.
+
+    Returns ``SessionResult(html, cookies, user_agent, final_url)``.
+    Adapters invoke via ``await asyncio.to_thread(fetch_session, url, ...)``.
+    """
+    try:
+        from grabarr.vendor.shelfmark.bypass import internal_bypasser
+    except ImportError as exc:
+        from grabarr.adapters.base import AdapterBypassError
+
+        raise AdapterBypassError(
+            "fetch_session requires the 'internal-bypasser' extra: "
+            "`uv sync --extra internal-bypasser`"
+        ) from exc
+
+    return internal_bypasser._CDP_WORKER.run(
+        _fetch_session_async(
+            url,
+            settle_seconds=settle_seconds,
+            wait_until_visible=wait_until_visible,
+            wait_until_visible_timeout=wait_until_visible_timeout,
+        ),
+        timeout=timeout + wait_until_visible_timeout + 60,
+    )
+
+
+async def _fetch_session_async(
+    url: str,
+    *,
+    settle_seconds: float,
+    wait_until_visible: str | None,
+    wait_until_visible_timeout: int,
+) -> SessionResult:
+    """Boot Chromium, navigate to ``url``, optionally wait for an element
+    to lose its ``hidden`` class, snapshot HTML + cookies + UA."""
+    from grabarr.vendor.shelfmark.bypass import internal_bypasser
+
+    driver = None
+    try:
+        driver = await internal_bypasser._create_cdp_browser(url)
+        # _create_cdp_browser parks the tab on chrome://new-tab-page.
+        # Navigate to the actual URL ourselves.
+        page = await driver.get(url)
+
+        # Let initial JS (cookie-setters, CF challenge scripts) finish.
+        await asyncio.sleep(settle_seconds)
+
+        if wait_until_visible:
+            js_check = (
+                f"!document.querySelector({wait_until_visible!r})?"
+                f".classList.contains('hidden')"
+            )
+            for elapsed in range(wait_until_visible_timeout):
+                try:
+                    visible = await page.evaluate(js_check)
+                except Exception as exc:  # noqa: BLE001
+                    _log.debug(
+                        "fetch_session: visibility probe raised: %s", exc
+                    )
+                    visible = False
+                if visible:
+                    _log.info(
+                        "fetch_session: %s revealed after %ds",
+                        wait_until_visible, elapsed,
+                    )
+                    break
+                await asyncio.sleep(1)
+            else:
+                _log.warning(
+                    "fetch_session: %s still hidden after %ds; proceeding anyway",
+                    wait_until_visible, wait_until_visible_timeout,
+                )
+
+        html = ""
+        try:
+            html = await page.get_content()
+        except Exception as exc:  # noqa: BLE001
+            _log.debug("fetch_session: get_content failed: %s", exc)
+
+        final_url = url
+        try:
+            cur = await page.get_current_url()
+            if cur:
+                final_url = cur
+        except Exception as exc:  # noqa: BLE001
+            _log.debug("fetch_session: get_current_url failed: %s", exc)
+
+        cookies: dict[str, str] = {}
+        try:
+            cookies_list = await driver.cookies.get_all()
+            cookies = {c.name: c.value for c in cookies_list}
+        except Exception as exc:  # noqa: BLE001
+            _log.debug("fetch_session: cookies fetch failed: %s", exc)
+
+        ua = ""
+        try:
+            ua = await page.evaluate("navigator.userAgent") or ""
+        except Exception as exc:  # noqa: BLE001
+            _log.debug("fetch_session: UA fetch failed: %s", exc)
+
+        return SessionResult(
+            html=html, cookies=cookies, user_agent=ua, final_url=final_url
+        )
+    finally:
+        if driver is not None:
+            try:
+                from grabarr.vendor.shelfmark.bypass.internal_bypasser import (
+                    _close_cdp_driver,
+                )
+
+                await _close_cdp_driver(driver)
+            except Exception as exc:  # noqa: BLE001
+                _log.debug("fetch_session: driver close failed: %s", exc)
+
+
 def click_and_capture(
     url: str,
     *,

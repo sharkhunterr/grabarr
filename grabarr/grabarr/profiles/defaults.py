@@ -92,14 +92,18 @@ DEFAULT_PROFILES: list[dict[str, Any]] = [
         "description": (
             "Single ROM profile aggregating every ROM-capable adapter: "
             "Vimm's Lair (curated retro), Edge Emulation (wide multi-"
-            "platform), Internet Archive (romsets + arcade collections). "
-            "Pin a system via extra_query_terms (e.g. system:N64 for "
-            "Vimm, system:nintendo-snes for Edge)."
+            "platform), RomsFun (CF + JS-countdown), Internet Archive "
+            "(romsets + arcade collections). Pin a system via "
+            "extra_query_terms (e.g. system:N64 for Vimm, system:"
+            "nintendo-snes for Edge)."
         ),
         "media_type": MediaType.GAME_ROM.value,
         "sources": [
             _src("vimm", 1.2),
             _src("edge_emulation", 1.0),
+            # RomsFun's download path drives a Chromium per-grab
+            # for a 7s JS countdown — heavier than the others.
+            _src("romsfun", 0.9, timeout=120),
             _src("internet_archive", 0.8, timeout=90),
         ],
         "filters": _filters(),
