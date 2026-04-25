@@ -555,16 +555,33 @@ def _parse_vimm_list(
                 y = int(year_match.group(1))
                 if 1970 <= y <= 2099:
                     year = y
+        # Version: in-title marker (Pirate / Hack / Proto / Beta / etc.)
+        # OR an adjacent <b class="redBorder" title="Virtual Console">VC</b>
+        # tag for items like Virtual Console / e-Reader / Aftermarket.
+        version_label: str | None = None
+        for marker in (
+            "Pirate", "Hack", "Beta", "Demo", "Proto", "Prototype",
+            "Unl", "Aftermarket", "e-Reader", "Test", "Sample",
+        ):
+            if f"({marker}" in title:
+                version_label = marker
+                break
+        if version_label is None:
+            sib = link.find_next_sibling("b")
+            if sib is not None and "redBorder" in (sib.get("class") or []):
+                bt = (sib.get("title") or sib.get_text(strip=True) or "").strip()
+                if bt:
+                    version_label = bt[:24]
         # Quality score: substring match boosts the row.
         score = 50.0
         if query.lower() in title.lower():
             score += 25.0
-        if "(Pirate)" in title or "(Hack)" in title:
+        if version_label in ("Pirate", "Hack"):
             score -= 15.0
         out.append(
             SearchResult(
                 external_id=external_id,
-                title=f"{title} [{system}]",
+                title=title,  # bare; torznab adds [Console] [Region] tags
                 author=None,
                 year=year,
                 format=fmt_hint,
@@ -578,8 +595,10 @@ def _parse_vimm_list(
                 media_type=MediaType.GAME_ROM,
                 metadata={
                     "vimm_system": system,
-                    "vimm_system_label": sys_label,
                     "vimm_regions": regions,
+                    "console_label": system,
+                    "region_label": regions[0] if regions else None,
+                    "version_label": version_label,
                     "size_is_estimate": True,
                 },
             )

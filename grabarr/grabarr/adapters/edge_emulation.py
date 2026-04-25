@@ -314,36 +314,63 @@ def _parse_edge_results(
         href = link.get("href", "")
         if not href.startswith("/download/"):
             continue
-        # Strip the leading "/download/" → "<system>/<filename>".
         external_id = href[len("/download/") :]
         try:
             system, encoded_name = external_id.split("/", 1)
         except ValueError:
             continue
-        # Size + downloads are the <span> after the link, comma-separated.
+        # Size from the <span> after the link.
         size_bytes: int | None = None
         size_span = link.find_next("span")
         if size_span:
             raw = (size_span.get_text(strip=True) or "").split(",", 1)[0].strip()
             size_bytes = _parse_size_edge(raw)
 
-        # System is also exposed as a labeled <p>system: <span>...</span></p>.
-        system_label = _EDGE_SYSTEM_LABEL.get(system, system.replace("-", " ").title())
+        # File hash is in <p>hash: <span>SHA-1 or CRC32</span></p>.
+        file_hash: str | None = None
+        for p in item.find_all("p"):
+            txt = p.get_text(strip=True).lower()
+            if txt.startswith("hash:"):
+                hs = p.find("span")
+                if hs:
+                    h = hs.get_text(strip=True)
+                    if re.fullmatch(r"[0-9a-fA-F]{8,40}", h):
+                        file_hash = h.lower()
+                break
 
-        # Quality score: substring match on title boosts.
+        system_label = _EDGE_SYSTEM_LABEL.get(
+            system, system.replace("-", " ").title()
+        )
+
+        # Parse parenthesised tags from the filename / title:
+        #   (USA), (Japan), (Europe), (World), (USA, Australia)
+        #   (Rev 1), (Beta), (Hack), (Demo), (Proto), (Unl)
+        #   (En,Fr,De,Es,It)
+        region_label, version_label, lang_code = _parse_edge_tags(
+            data_name or title
+        )
+
+        # Stripped title for the bare display: drop the parenthesised
+        # block(s) since the tags are now exposed by the torznab builder.
+        clean_title = re.sub(r"\s*\([^)]*\)\s*", " ", title).strip()
+        if not clean_title:
+            clean_title = title
+
         score = 50.0
         decoded_name = unquote(encoded_name)
         if query.lower() in title.lower() or query.lower() in decoded_name.lower():
             score += 25.0
+        if version_label in {"Hack", "Pirate"}:
+            score -= 15.0
 
         out.append(
             SearchResult(
                 external_id=external_id,
-                title=f"{title} [{system_label}]",
+                title=clean_title,
                 author=None,
                 year=None,
                 format=_format_from_filename(data_name),
-                language=None,
+                language=lang_code,
                 size_bytes=size_bytes,
                 quality_score=score,
                 source_id=source_id,
@@ -351,9 +378,66 @@ def _parse_edge_results(
                 metadata={
                     "edge_system": system,
                     "edge_filename": data_name,
+                    "console_label": system_label,
+                    "region_label": region_label,
+                    "version_label": version_label,
+                    "file_hash": file_hash,
                 },
             )
         )
         if len(out) >= limit:
             break
     return out
+
+
+# ----- filename-tag parsing -------------------------------------------------
+
+_REGION_KEYWORDS: tuple[str, ...] = (
+    "USA", "Japan", "Europe", "World", "Australia", "Korea", "China",
+    "Brazil", "France", "Germany", "Spain", "Italy", "Netherlands",
+    "Asia",
+)
+_VERSION_KEYWORDS: tuple[str, ...] = (
+    "Hack", "Pirate", "Beta", "Demo", "Proto", "Prototype", "Unl",
+    "Aftermarket", "Sample", "Test", "Translation", "Fan Translation",
+)
+
+
+def _parse_edge_tags(name: str) -> tuple[str | None, str | None, str | None]:
+    """Pull (region, version, lang) out of an Edge data-name / summary.
+
+    Filenames look like ``Mario Kart DS (USA, Australia) (En,Fr,De,Es,It).zip``
+    — multiple parenthesised groups, comma-separated entries inside.
+    """
+    region = None
+    version = None
+    lang = None
+    for paren in re.findall(r"\(([^)]*)\)", name):
+        items = [it.strip() for it in paren.split(",")]
+        if not items:
+            continue
+        # Region: any item matches a known region keyword.
+        if region is None:
+            hits = [it for it in items if it in _REGION_KEYWORDS]
+            if hits:
+                region = ", ".join(hits)
+                continue
+        # Languages: items look like 2-letter codes (En, Fr, De, …).
+        if lang is None and all(
+            len(it) == 2 and it.isalpha() and it[0].isupper() for it in items
+        ):
+            lang = items[0].lower()
+            continue
+        # Version markers: contains a known keyword (case-insensitive).
+        if version is None:
+            for kw in _VERSION_KEYWORDS:
+                if any(kw.lower() in it.lower() for it in items):
+                    version = kw
+                    break
+            else:
+                # Rev N
+                for it in items:
+                    if it.lower().startswith("rev "):
+                        version = it
+                        break
+    return region, version, lang

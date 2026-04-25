@@ -96,7 +96,9 @@ def fetch_session(
     *,
     settle_seconds: float = 2.0,
     wait_until_visible: str | None = None,
-    wait_until_visible_timeout: int = 30,
+    wait_until_ready_js: str | None = None,
+    pre_action_js: str | None = None,
+    wait_timeout: int = 30,
     timeout: int = 60,
 ) -> SessionResult:
     """Sync entry point — boot Chromium, navigate, snapshot HTML + cookies + UA.
@@ -130,14 +132,23 @@ def fetch_session(
             "`uv sync --extra internal-bypasser`"
         ) from exc
 
+    # `wait_until_visible` is sugar for the more general JS form.
+    effective_wait_js = wait_until_ready_js
+    if effective_wait_js is None and wait_until_visible:
+        effective_wait_js = (
+            f"!document.querySelector({wait_until_visible!r})?"
+            f".classList.contains('hidden')"
+        )
+
     return internal_bypasser._CDP_WORKER.run(
         _fetch_session_async(
             url,
             settle_seconds=settle_seconds,
-            wait_until_visible=wait_until_visible,
-            wait_until_visible_timeout=wait_until_visible_timeout,
+            wait_until_ready_js=effective_wait_js,
+            pre_action_js=pre_action_js,
+            wait_timeout=wait_timeout,
         ),
-        timeout=timeout + wait_until_visible_timeout + 60,
+        timeout=timeout + wait_timeout + 60,
     )
 
 
@@ -145,8 +156,9 @@ async def _fetch_session_async(
     url: str,
     *,
     settle_seconds: float,
-    wait_until_visible: str | None,
-    wait_until_visible_timeout: int,
+    wait_until_ready_js: str | None,
+    pre_action_js: str | None,
+    wait_timeout: int,
 ) -> SessionResult:
     """Boot Chromium, navigate to ``url``, optionally wait for an element
     to lose its ``hidden`` class, snapshot HTML + cookies + UA."""
@@ -162,30 +174,30 @@ async def _fetch_session_async(
         # Let initial JS (cookie-setters, CF challenge scripts) finish.
         await asyncio.sleep(settle_seconds)
 
-        if wait_until_visible:
-            js_check = (
-                f"!document.querySelector({wait_until_visible!r})?"
-                f".classList.contains('hidden')"
-            )
-            for elapsed in range(wait_until_visible_timeout):
+        if pre_action_js:
+            try:
+                await page.evaluate(pre_action_js)
+            except Exception as exc:  # noqa: BLE001
+                _log.warning("fetch_session: pre_action_js raised: %s", exc)
+
+        if wait_until_ready_js:
+            for elapsed in range(wait_timeout):
                 try:
-                    visible = await page.evaluate(js_check)
+                    ready = bool(await page.evaluate(wait_until_ready_js))
                 except Exception as exc:  # noqa: BLE001
-                    _log.debug(
-                        "fetch_session: visibility probe raised: %s", exc
-                    )
-                    visible = False
-                if visible:
+                    _log.debug("fetch_session: ready probe raised: %s", exc)
+                    ready = False
+                if ready:
                     _log.info(
-                        "fetch_session: %s revealed after %ds",
-                        wait_until_visible, elapsed,
+                        "fetch_session: ready condition met after %ds", elapsed
                     )
                     break
                 await asyncio.sleep(1)
             else:
                 _log.warning(
-                    "fetch_session: %s still hidden after %ds; proceeding anyway",
-                    wait_until_visible, wait_until_visible_timeout,
+                    "fetch_session: ready condition never met after %ds; "
+                    "proceeding with current page state",
+                    wait_timeout,
                 )
 
         html = ""

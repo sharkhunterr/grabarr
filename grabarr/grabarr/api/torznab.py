@@ -166,19 +166,34 @@ _SOURCE_LABEL: dict[str, str] = {
     "vimm": "Vimm's Lair",
     "edge_emulation": "Edge Emulation",
     "romsfun": "RomsFun",
+    "cdromance": "CDRomance",
+    "myabandonware": "MyAbandonware",
 }
 
 
 def _build_release_title(r: Any) -> str:  # noqa: ANN401
-    """Scene-style title so Bookshelf / Readarr parsers succeed.
+    """Scene-style title so Bookshelf / Readarr / Prowlarr parsers succeed.
 
-    Format: ``[SOURCE] {Author} - {Title} ({year}) [FORMAT]`` with
-    reasonable fallbacks for each missing field. The leading
-    ``[SOURCE]`` tag lets the operator see at-a-glance which adapter
-    served a given result (AA / LibGen / IA / Z-Lib / Welib) — useful
-    to pick a release less likely to hit CF-bypass-only download paths.
+    Layout: ``[Source] [Console] [Region] [Lang] [Version] {Author} - {Title} (year) [FORMAT]``
+
+    ``[Source]`` is the adapter display label. The next four optional
+    tags are pulled from ``r.metadata`` (``console_label``,
+    ``region_label``, ``version_label``) and ``r.language``. Empty /
+    missing tags are skipped — order is fixed regardless. The ``(year)``
+    + ``[FORMAT]`` suffix matches what scene parsers expect.
     """
-    source_label = _SOURCE_LABEL.get(r.source_id, r.source_id)
+    meta = r.metadata or {}
+    tags: list[str] = [_SOURCE_LABEL.get(r.source_id, r.source_id)]
+    for key in ("console_label", "region_label"):
+        v = (meta.get(key) or "").strip()
+        if v:
+            tags.append(v)
+    if r.language:
+        tags.append(str(r.language).upper())
+    ver = (meta.get("version_label") or "").strip()
+    if ver:
+        tags.append(ver)
+
     parts: list[str] = []
     if r.author:
         parts.append(str(r.author).strip())
@@ -188,7 +203,7 @@ def _build_release_title(r: Any) -> str:  # noqa: ANN401
         out += f" ({r.year})"
     if r.format and r.format != "?":
         out += f" [{r.format.upper()}]"
-    return f"[{source_label}] {out}"
+    return " ".join(f"[{t}]" for t in tags) + " " + out
 
 
 def _pseudo_info_hash(profile_slug: str, source_id: str, external_id: str) -> str:
@@ -271,6 +286,13 @@ def _build_search_rss(
             fmt = r.format.lower().lstrip(".")
             extras.append(f'<torznab:attr name="format" value="{xml_escape(fmt.upper())}"/>')
             extras.append(f'<torznab:attr name="codec" value="{xml_escape(fmt.upper())}"/>')
+        # Real source-file hash (CRC32 / MD5 / SHA-1) when the adapter
+        # exposes one (Edge Emulation, future Vimm/IA work). Distinct
+        # from the synthetic torznab `infohash` attr above which is
+        # the BitTorrent dedupe key Prowlarr expects.
+        file_hash = (r.metadata or {}).get("file_hash")
+        if file_hash:
+            extras.append(f'<torznab:attr name="hash" value="{xml_escape(file_hash)}"/>')
             # For audio: bitrate / quality are expected too; skipped for now.
 
         desc_bits: list[str] = []

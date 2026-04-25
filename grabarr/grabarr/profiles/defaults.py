@@ -90,20 +90,21 @@ DEFAULT_PROFILES: list[dict[str, Any]] = [
         "slug": "roms_all",
         "name": "ROMs — All Sources",
         "description": (
-            "Single ROM profile aggregating every ROM-capable adapter: "
-            "Vimm's Lair (curated retro), Edge Emulation (wide multi-"
-            "platform), RomsFun (CF + JS-countdown), Internet Archive "
-            "(romsets + arcade collections). Pin a system via "
-            "extra_query_terms (e.g. system:N64 for Vimm, system:"
-            "nintendo-snes for Edge)."
+            "Aggregates every ROM-capable adapter: Vimm's Lair, Edge "
+            "Emulation, RomsFun, CDRomance, MyAbandonware (PC abandonware), "
+            "and Internet Archive. Pin a system via extra_query_terms "
+            "(e.g. system:N64 for Vimm, system:nintendo-snes for Edge)."
         ),
         "media_type": MediaType.GAME_ROM.value,
         "sources": [
             _src("vimm", 1.2),
             _src("edge_emulation", 1.0),
-            # RomsFun's download path drives a Chromium per-grab
-            # for a 7s JS countdown — heavier than the others.
+            # The three Chromium-driven sources (RomsFun, CDRomance,
+            # MyAbandonware) each spin a real browser per grab — bump
+            # their per-call timeout to 120 s.
             _src("romsfun", 0.9, timeout=120),
+            _src("cdromance", 0.85, timeout=120),
+            _src("myabandonware", 0.7, timeout=120),
             _src("internet_archive", 0.8, timeout=90),
         ],
         "filters": _filters(),

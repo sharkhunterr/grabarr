@@ -198,7 +198,7 @@ class RomsFunAdapter:
                 per_file_url,
                 settle_seconds=1.5,
                 wait_until_visible="#download-button",
-                wait_until_visible_timeout=30,
+                wait_timeout=30,
                 timeout=60,
             )
         except AdapterError:
@@ -312,16 +312,35 @@ def _parse_search_html(
         sys_label = _SYSTEM_LABEL.get(
             console_slug, console_slug.replace("-", " ").title()
         )
+        # Tag promotion from in-title parentheses.
+        version_label: str | None = None
+        for kw in ("Hack", "Pirate", "Beta", "Demo", "Proto", "Translation"):
+            if kw.lower() in title_text.lower():
+                version_label = kw
+                break
+        region_label: str | None = None
+        for region in (
+            "USA", "Japan", "Europe", "World", "Australia", "Korea",
+            "China", "Asia",
+        ):
+            if region in title_text:
+                region_label = region
+                break
+        clean_title = re.sub(r"\s*\([^)]*\)\s*", " ", title_text).strip()
+        if not clean_title:
+            clean_title = title_text
         score = 50.0
         if query.lower() in title_text.lower():
             score += 25.0
+        if version_label in {"Hack", "Pirate"}:
+            score -= 15.0
         out.append(
             SearchResult(
                 external_id=external_id,
-                title=f"{title_text} [{sys_label}]",
+                title=clean_title,
                 author=None,
                 year=None,
-                format="rom",  # resolved post-download
+                format="rom",
                 language=None,
                 size_bytes=None,
                 quality_score=score,
@@ -330,6 +349,9 @@ def _parse_search_html(
                 metadata={
                     "romsfun_console": console_slug,
                     "romsfun_slug": game_slug,
+                    "console_label": sys_label,
+                    "region_label": region_label,
+                    "version_label": version_label,
                 },
             )
         )

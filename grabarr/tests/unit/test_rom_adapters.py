@@ -54,13 +54,16 @@ _VIMM_LIST_HTML = (
 def test_vimm_parses_list_table() -> None:
     rows = _parse_vimm_list(_VIMM_LIST_HTML, "NES", "mario", "vimm", limit=10)
     assert [r.external_id for r in rows] == ["287", "535", "94591"]
-    # Title gets the [<system>] tag suffix.
-    assert rows[0].title == "Dr. Mario [NES]"
+    # Title is the bare game name; torznab adds [Console][Region] tags.
+    assert rows[0].title == "Dr. Mario"
+    assert rows[0].metadata.get("console_label") == "NES"
+    assert rows[0].metadata.get("region_label") == "USA"
     # USA region → en, format is the per-system extension.
     assert rows[0].language == "en"
     assert rows[0].format == "nes"
     # Pirate rows are score-penalised.
     assert rows[2].quality_score < rows[1].quality_score
+    assert rows[2].metadata.get("version_label") == "Pirate"
     # _TYPICAL_SIZE placeholder so Prowlarr doesn't render 0 B.
     assert rows[0].size_bytes and rows[0].size_bytes > 0
     assert rows[0].metadata.get("size_is_estimate") is True
@@ -167,8 +170,11 @@ def test_edge_parse_results() -> None:
     assert len(results) == 2
     first = results[0]
     assert first.external_id == "nintendo-64/Super%20Mario%2064%20%28USA%29.zip"
+    # Title is bare; torznab builds [Console][Region] from metadata.
     assert first.title.startswith("Super Mario 64")
-    assert first.title.endswith("[N64]")  # _EDGE_SYSTEM_LABEL
+    assert "(USA)" not in first.title  # the region paren stripped
+    assert first.metadata["console_label"] == "N64"
+    assert first.metadata["region_label"] == "USA"
     assert first.format == "zip"
     assert first.size_bytes == int(5.95 * 1024 ** 2)
     assert first.quality_score >= 50
