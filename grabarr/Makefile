@@ -1,4 +1,8 @@
-.PHONY: help dev test test-unit test-integration test-vendor-compat lint format tailwind-build tailwind-watch vendor-shelfmark clean
+.PHONY: help dev test test-unit test-integration test-vendor-compat lint format \
+        tailwind-build tailwind-watch vendor-shelfmark clean \
+        release release-minor release-major release-github release-deploy release-full release-dry \
+        push push-github push-all push-tags \
+        docker-build docker-deploy docker-deploy-multi
 
 TAILWIND_VERSION := v3.4.14
 TAILWIND_PLATFORM := $(shell uname -s | tr '[:upper:]' '[:lower:]')-$(shell uname -m | sed 's/x86_64/x64/;s/aarch64/arm64/')
@@ -52,3 +56,52 @@ vendor-shelfmark:  ## Re-pull Shelfmark and re-vendor into grabarr/vendor/shelfm
 clean:  ## Remove build/cache artefacts
 	rm -rf build/ dist/ *.egg-info .pytest_cache .mypy_cache .ruff_cache
 	find . -type d -name __pycache__ -exec rm -rf {} +
+
+# ---------------------------------------------------------------------------
+# Release pipeline (ports Ghostarr's npm-run-release-full UX). All commands
+# run scripts/release.py which bumps the version, regenerates CHANGELOG.md,
+# tags + pushes. The release pipeline in .gitlab-ci.yml is TAG-ONLY, so the
+# only way to trigger CI is via these targets.
+# ---------------------------------------------------------------------------
+
+release:  ## Patch release on GitLab only (X.Y.Z → X.Y.Z+1)
+	uv run python scripts/release.py patch
+
+release-minor:  ## Minor release on GitLab only (X.Y.Z → X.Y+1.0)
+	uv run python scripts/release.py minor
+
+release-major:  ## Major release on GitLab only (X.Y.Z → X+1.0.0)
+	uv run python scripts/release.py major
+
+release-github:  ## Patch release on GitLab + GitHub (no Docker Hub)
+	uv run python scripts/release.py patch --github
+
+release-deploy:  ## Patch release + trigger Docker Hub publish via CI
+	uv run python scripts/release.py patch --deploy
+
+release-full:  ## Patch release + GitLab + GitHub + Docker Hub
+	uv run python scripts/release.py patch --github --deploy
+
+release-dry:  ## Dry-run a release (prints what would happen)
+	uv run python scripts/release.py patch --dry-run
+
+push:  ## Push branch + tags to GitLab (origin)
+	uv run python scripts/push.py
+
+push-github:  ## Push branch + tags to GitHub remote
+	uv run python scripts/push.py --github
+
+push-all:  ## Push branch + tags to both remotes
+	uv run python scripts/push.py --all
+
+push-tags:  ## Push only tags to both remotes
+	uv run python scripts/push.py --all --tags-only
+
+docker-build:  ## Build the Docker image locally (no push)
+	uv run python scripts/docker_deploy.py
+
+docker-deploy:  ## Build + push Docker image to Docker Hub (linux/amd64)
+	uv run python scripts/docker_deploy.py --push
+
+docker-deploy-multi:  ## Build + push multi-arch (amd64 + arm64) to Docker Hub
+	uv run python scripts/docker_deploy.py --push --multi-platform

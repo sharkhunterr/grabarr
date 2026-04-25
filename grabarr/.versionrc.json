@@ -1,0 +1,25 @@
+{
+  "_comment": "Reference / documentation only. Grabarr is a Python project; we don't run standard-version. The actual release flow lives in scripts/release.py, which mirrors the same conventional-commit categorisation defined here. Keep both in sync if you tweak one.",
+  "types": [
+    {"type": "feat", "section": "✨ Features"},
+    {"type": "fix", "section": "🐛 Bug Fixes"},
+    {"type": "perf", "section": "🚀 Performance"},
+    {"type": "refactor", "section": "♻️  Refactoring"},
+    {"type": "revert", "section": "⏪ Reverts"},
+    {"type": "docs", "section": "Documentation", "hidden": true},
+    {"type": "style", "section": "Styles", "hidden": true},
+    {"type": "test", "section": "Tests", "hidden": true},
+    {"type": "build", "section": "Build System", "hidden": true},
+    {"type": "ci", "section": "Continuous Integration", "hidden": true},
+    {"type": "chore", "section": "Chores", "hidden": true}
+  ],
+  "commitUrlFormat": "{{host}}/{{owner}}/{{repository}}/-/commit/{{hash}}",
+  "compareUrlFormat": "{{host}}/{{owner}}/{{repository}}/-/compare/{{previousTag}}...{{currentTag}}",
+  "issueUrlFormat": "{{host}}/{{owner}}/{{repository}}/-/issues/{{id}}",
+  "releaseCommitMessageFormat": "chore(release): v{{currentTag}}",
+  "bumpFiles": [
+    {"filename": "pyproject.toml", "type": "toml-version"},
+    {"filename": "grabarr/__init__.py", "type": "python-version"}
+  ],
+  "tagPrefix": "v"
+}

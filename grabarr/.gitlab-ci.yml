@@ -1,0 +1,314 @@
+# GitLab CI/CD Pipeline — Grabarr
+# Adapted from Ghostarr's pipeline (sharkhunterr/ghostarr) for a
+# Python / uv project. The whole pipeline only runs on tag creation
+# (`make release-full` → git tag vX.Y.Z + push --follow-tags).
+
+# =============================================================================
+# Global variables
+# =============================================================================
+variables:
+  PROJECT_TYPE: "python"
+  PYTHON_VERSION: "3.12"
+  UV_VERSION: "0.9.0"
+
+  # Stage gates
+  ENABLE_BACKEND_TESTS: "true"
+  ENABLE_DOCKER_BUILD: "true"
+  ENABLE_GITLAB_REGISTRY: "false"
+
+  # Deploy gates — flipped to "true" by `make release-full` /
+  # `make release-deploy` via `git push -o ci.variable=DEPLOY=true`.
+  DOCKER_HUB_ENABLED: "true"
+  GITHUB_DEPLOY_ENABLED: "true"
+
+  # Docker
+  DOCKER_IMAGE: $CI_PROJECT_NAME
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: ""
+  DOCKER_HOST: tcp://docker:2375
+
+# =============================================================================
+# Workflow — TAG-ONLY pipeline.
+# =============================================================================
+# By design we never run on branch pushes or MRs; the developer's loop
+# on a feature branch is local (`make test`, `make lint`). The pipeline
+# is the release pipeline, triggered exclusively by `make release` /
+# `make release-full` which create + push a `vX.Y.Z` tag.
+workflow:
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/'
+
+# =============================================================================
+# Stages
+# =============================================================================
+stages:
+  - validate
+  - test
+  - build
+  - publish
+  - deploy
+  - release
+  - verify
+
+# =============================================================================
+# Reusable templates
+# =============================================================================
+.python_template: &python_template
+  image: python:${PYTHON_VERSION}-slim
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}-uv
+    paths:
+      - .uv-cache/
+      - .venv/
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends curl ca-certificates
+    - curl -LsSf https://astral.sh/uv/install.sh | sh
+    - export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$PATH"
+    - uv --version
+    - uv sync --frozen --no-dev --extra=internal-bypasser || uv sync --frozen --extra=internal-bypasser
+    - uv pip install pytest pytest-asyncio respx ruff
+
+.docker_template: &docker_template
+  image: docker:24-cli
+  services:
+    - name: docker:24-dind
+      alias: docker
+      command: ["--tls=false"]
+  before_script:
+    - until docker info; do sleep 1; done
+
+# =============================================================================
+# Stage: validate
+# =============================================================================
+validate:lint:
+  stage: validate
+  <<: *python_template
+  script:
+    - uv run ruff check grabarr/ tests/ --output-format=text > ruff-report.txt || true
+    - uv run ruff check grabarr/ tests/ || echo "⚠️ ruff issues remaining"
+    - uv run ruff format --check grabarr/ tests/ || echo "⚠️ formatting drift"
+  artifacts:
+    when: always
+    paths:
+      - ruff-report.txt
+    expire_in: 1 week
+  allow_failure: true
+
+# =============================================================================
+# Stage: test
+# =============================================================================
+test:backend:
+  stage: test
+  <<: *python_template
+  script:
+    - uv run pytest -q --junitxml=junit.xml
+  artifacts:
+    when: always
+    reports:
+      junit: junit.xml
+    expire_in: 1 week
+  rules:
+    - if: '$ENABLE_BACKEND_TESTS == "true"'
+
+# =============================================================================
+# Stage: build (Docker image)
+# =============================================================================
+build:docker:
+  stage: build
+  <<: *docker_template
+  variables:
+    DOCKER_BUILDKIT: 1
+  script:
+    - |
+      docker build \
+        --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
+        --build-arg VCS_REF=${CI_COMMIT_SHA} \
+        --build-arg VERSION=${CI_COMMIT_TAG:-$CI_COMMIT_SHORT_SHA} \
+        --tag ${DOCKER_IMAGE}:${CI_COMMIT_SHA} \
+        --tag ${DOCKER_IMAGE}:${CI_COMMIT_REF_SLUG} \
+        --file Dockerfile \
+        .
+    - docker save ${DOCKER_IMAGE}:${CI_COMMIT_SHA} > image.tar
+  artifacts:
+    paths:
+      - image.tar
+    expire_in: 1 day
+  rules:
+    - if: '$ENABLE_DOCKER_BUILD == "true"'
+
+# =============================================================================
+# Stage: publish (optional GitLab Container Registry)
+# =============================================================================
+publish:gitlab-registry:
+  stage: publish
+  <<: *docker_template
+  needs: [build:docker]
+  dependencies: [build:docker]
+  script:
+    - docker load < image.tar
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - docker tag ${DOCKER_IMAGE}:${CI_COMMIT_SHA} ${CI_REGISTRY_IMAGE}:${CI_COMMIT_TAG}
+    - docker tag ${DOCKER_IMAGE}:${CI_COMMIT_SHA} ${CI_REGISTRY_IMAGE}:latest
+    - docker push ${CI_REGISTRY_IMAGE}:${CI_COMMIT_TAG}
+    - docker push ${CI_REGISTRY_IMAGE}:latest
+  rules:
+    - if: '$ENABLE_GITLAB_REGISTRY == "true"'
+
+# =============================================================================
+# Stage: deploy (Docker Hub publish + GitHub mirror)
+# =============================================================================
+deploy:
+  stage: deploy
+  image: docker:24-cli
+  services:
+    - docker:24-dind
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+    DOCKER_BUILDKIT: 1
+    GIT_DEPTH: 0
+  before_script:
+    - apk add --no-cache git curl jq
+    - git fetch --unshallow || true
+    - until docker info; do sleep 1; done
+  script:
+    # Docker Hub publish
+    - |
+      if [ "$DOCKER_HUB_ENABLED" = "true" ]; then
+        echo "📦 Building Docker image..."
+        docker build \
+          --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
+          --build-arg VCS_REF=${CI_COMMIT_SHA} \
+          --build-arg VERSION=${CI_COMMIT_TAG} \
+          --tag ${DOCKER_IMAGE}:${CI_COMMIT_SHA} \
+          --file Dockerfile \
+          .
+        echo "🐳 Logging in to Docker Hub..."
+        echo "$DOCKER_HUB_TOKEN" | docker login -u "$DOCKER_HUB_USER" --password-stdin
+
+        DOCKER_HUB_IMAGE="${DOCKER_HUB_USER}/${CI_PROJECT_NAME}"
+        docker tag ${DOCKER_IMAGE}:${CI_COMMIT_SHA} ${DOCKER_HUB_IMAGE}:${CI_COMMIT_TAG}
+        docker tag ${DOCKER_IMAGE}:${CI_COMMIT_SHA} ${DOCKER_HUB_IMAGE}:latest
+        docker push ${DOCKER_HUB_IMAGE}:${CI_COMMIT_TAG}
+        docker push ${DOCKER_HUB_IMAGE}:latest
+
+        # Optional: refresh the Docker Hub README from docker/DOCKERHUB.md.
+        if [ -f "docker/DOCKERHUB.md" ]; then
+          wget -q https://github.com/christian-korneck/docker-pushrm/releases/download/v1.9.0/docker-pushrm_linux_amd64 -O /usr/local/bin/docker-pushrm
+          chmod +x /usr/local/bin/docker-pushrm
+          docker-pushrm --file docker/DOCKERHUB.md --short "$CI_PROJECT_TITLE" "${DOCKER_HUB_IMAGE}" || echo "⚠️ docker-pushrm failed"
+        fi
+      fi
+    # GitHub mirror
+    - |
+      if [ "$GITHUB_DEPLOY_ENABLED" = "true" ]; then
+        echo "🔁 Mirroring tag + default branch to GitHub..."
+        git remote add github https://${GITHUB_TOKEN}@github.com/${GITHUB_REPO}.git || true
+        git push github HEAD:refs/heads/${CI_DEFAULT_BRANCH} --force
+        git push github refs/tags/${CI_COMMIT_TAG}:refs/tags/${CI_COMMIT_TAG} --force
+      fi
+  rules:
+    - if: '$DEPLOY == "true"'
+
+# =============================================================================
+# Stage: release (GitLab + GitHub releases)
+# =============================================================================
+release:gitlab:
+  stage: release
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  before_script:
+    - apk add --no-cache sed gawk
+  script:
+    - |
+      VERSION="${CI_COMMIT_TAG#v}"
+      NOTES=""
+      # Prefer GITHUB_RELEASES.md (curated by hand); fall back to CHANGELOG.
+      if [ -f GITHUB_RELEASES.md ]; then
+        NOTES=$(awk "/^# v[0-9]/{if(found==0){found=1; p=1}} /^# v[0-9]/{if(found==1 && p==1 && NR>1){exit}} p{print}" GITHUB_RELEASES.md | sed 's/^---$//' | sed '/^$/N;/^\n$/D')
+      fi
+      if [ -z "$NOTES" ] && [ -f CHANGELOG.md ]; then
+        NOTES=$(awk "/^## \\[${VERSION}\\]/{flag=1; next} /^## \\[/{flag=0} flag" CHANGELOG.md)
+      fi
+      [ -z "$NOTES" ] && NOTES="Release ${CI_COMMIT_TAG}"
+      printf '%s\n\n---\n[Full CHANGELOG](%s/-/blob/%s/CHANGELOG.md)\n' \
+        "$NOTES" "$CI_PROJECT_URL" "$CI_COMMIT_TAG" > /tmp/notes.md
+      release-cli create \
+        --name "Release ${CI_COMMIT_TAG}" \
+        --tag-name "${CI_COMMIT_TAG}" \
+        --description "$(cat /tmp/notes.md)"
+
+release:github:
+  stage: release
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache curl jq
+  script:
+    - |
+      VERSION="${CI_COMMIT_TAG#v}"
+      NOTES=""
+      if [ -f GITHUB_RELEASES.md ]; then
+        NOTES=$(awk "/^# v[0-9]/{if(found==0){found=1; p=1}} /^# v[0-9]/{if(found==1 && p==1 && NR>1){exit}} p{print}" GITHUB_RELEASES.md | sed 's/^---$//' | sed '/^$/N;/^\n$/D')
+      fi
+      if [ -z "$NOTES" ] && [ -f CHANGELOG.md ]; then
+        NOTES=$(awk "/^## \\[${VERSION}\\]/{flag=1; next} /^## \\[/{flag=0} flag" CHANGELOG.md)
+      fi
+      [ -z "$NOTES" ] && NOTES="Release ${CI_COMMIT_TAG}"
+
+      RESPONSE=$(curl -X POST \
+        -H "Authorization: token ${GITHUB_TOKEN}" \
+        -H "Accept: application/vnd.github.v3+json" \
+        -H "Content-Type: application/json" \
+        -s -w "\n%{http_code}" \
+        "https://api.github.com/repos/${GITHUB_REPO}/releases" \
+        -d "$(jq -n \
+          --arg tag "${CI_COMMIT_TAG}" \
+          --arg name "Release ${CI_COMMIT_TAG}" \
+          --arg body "$NOTES" \
+          '{tag_name: $tag, name: $name, body: $body, draft: false, prerelease: false}')")
+      HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+      BODY=$(echo "$RESPONSE" | sed '$d')
+      if [ "$HTTP_CODE" -eq 201 ]; then
+        echo "✅ GitHub release created"
+        echo "$BODY" | jq -r '.html_url'
+      else
+        echo "❌ GitHub release failed (HTTP $HTTP_CODE)"
+        echo "$BODY" | jq '.' || echo "$BODY"
+        exit 1
+      fi
+  rules:
+    - if: '$DEPLOY == "true" && $GITHUB_DEPLOY_ENABLED == "true"'
+
+# =============================================================================
+# Stage: verify (post-deploy sanity)
+# =============================================================================
+verify:
+  stage: verify
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache curl jq
+  script:
+    - |
+      if [ "$DOCKER_HUB_ENABLED" = "true" ]; then
+        DOCKER_HUB_IMAGE="${DOCKER_HUB_USER}/${CI_PROJECT_NAME}"
+        TAG="${CI_COMMIT_TAG}"
+        RESPONSE=$(curl -s "https://hub.docker.com/v2/repositories/${DOCKER_HUB_IMAGE}/tags/${TAG}")
+        if echo "$RESPONSE" | jq -e '.name' > /dev/null 2>&1; then
+          echo "✅ Docker Hub: ${DOCKER_HUB_IMAGE}:${TAG} present"
+        else
+          echo "❌ Docker Hub: ${DOCKER_HUB_IMAGE}:${TAG} missing"
+          exit 1
+        fi
+      fi
+    - |
+      if [ "$GITHUB_DEPLOY_ENABLED" = "true" ]; then
+        RESPONSE=$(curl -s -H "Authorization: token ${GITHUB_TOKEN}" \
+          "https://api.github.com/repos/${GITHUB_REPO}/releases/tags/${CI_COMMIT_TAG}")
+        if echo "$RESPONSE" | jq -e '.id' > /dev/null 2>&1; then
+          echo "✅ GitHub release ${CI_COMMIT_TAG} present"
+          echo "$RESPONSE" | jq -r '.html_url'
+        else
+          echo "⚠️ GitHub release ${CI_COMMIT_TAG} not found yet (eventual consistency)"
+        fi
+      fi
+  rules:
+    - if: '$DEPLOY == "true"'
