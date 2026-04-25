@@ -32,7 +32,41 @@ _SIGNATURES: dict[str, list[tuple[int, bytes]]] = {
     "iso": [(0x8001, b"CD001")],
     "djvu": [(0, b"AT&TFORM")],
     "7z": [(0, b"7z\xbc\xaf\x27\x1c")],
+    # ROM formats with reliable headers.
+    "nes": [(0, b"NES\x1a")],                  # iNES
+    "n64": [(0, b"\x80\x37\x12\x40")],          # big-endian
+    "z64": [(0, b"\x80\x37\x12\x40")],          # big-endian (same as .n64)
+    "v64": [(0, b"\x37\x80\x40\x12")],          # byte-swapped
 }
+
+# ROM formats that are raw cartridge / disc dumps with no universal
+# magic signature. We accept these on extension-match alone — the
+# adapter knows what it grabbed because it queried for that system.
+# Container formats (zip / 7z / iso / chd / rvz) keep their own magic.
+_EXTENSION_ONLY_FORMATS: frozenset[str] = frozenset(
+    {
+        "smc", "sfc",           # SNES (no fixed header in raw dumps)
+        "gb", "gbc",            # Game Boy (header at 0x104 is the Nintendo logo,
+                                # not a fixed magic byte)
+        "gba",                  # Game Boy Advance
+        "nds",                  # Nintendo DS (has ASCII title @ 0, not a magic constant)
+        "3ds",                  # Nintendo 3DS dumps
+        "cia",                  # 3DS installable
+        "wbfs", "wad",          # Wii / WiiWare wrappers
+        "sms", "gg",            # Sega 8-bit
+        "gen", "md", "bin",     # Sega Genesis / generic raw
+        "32x",
+        "pce",                  # TurboGrafx
+        "a26", "a52", "a78",    # Atari 2600 / 5200 / 7800
+        "j64",                  # Jaguar
+        "lnx",                  # Lynx (LYNX header is optional)
+        "vb",                   # Virtual Boy
+        "gdi",                  # Dreamcast TOC
+        "chd",                  # MAME CHD (custom header — accept by ext)
+        "rvz",                  # Wii compressed
+        "rom",                  # generic
+    }
+)
 
 # Content-Type families we reject outright when not expected.
 _REJECTED_CONTENT_TYPES: frozenset[str] = frozenset(
@@ -106,6 +140,14 @@ def magic_matches(path: Path, expected_format: str | None) -> tuple[bool, str | 
 
     if expected_format:
         expected = expected_format.lower().lstrip(".")
+        if expected in _EXTENSION_ONLY_FORMATS:
+            # Raw ROM dumps + a few wrapper formats with no fixed magic.
+            # Accept when the actual filename matches the expected ext;
+            # this still rejects HTML / JSON masquerading as a ROM.
+            actual_ext = path.suffix.lower().lstrip(".")
+            if actual_ext == expected:
+                return True, expected
+            return False, None
         if _check(expected):
             return True, expected
         return False, None
