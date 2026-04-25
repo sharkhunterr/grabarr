@@ -50,7 +50,10 @@ class FakeTestAdapter:
         ]
 
     async def get_download_info(
-        self, external_id: str, media_type: MediaType
+        self,
+        external_id: str,
+        media_type: MediaType,
+        query_hint: str | None = None,  # noqa: ARG002
     ) -> DownloadInfo:
         return DownloadInfo(
             download_url="http://fake/placeholder.epub",

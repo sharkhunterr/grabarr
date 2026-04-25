@@ -168,6 +168,7 @@ class SourceAdapter(Protocol):
         self,
         external_id: str,
         media_type: MediaType,
+        query_hint: str | None = None,
     ) -> DownloadInfo:
         """Resolve a `SearchResult.external_id` to a concrete download URL.
 
@@ -175,6 +176,15 @@ class SourceAdapter(Protocol):
         sources until one yields a URL; implementations MUST respect the
         vendored Shelfmark failure-threshold semantics (4 consecutive
         failures → next sub-source).
+
+        ``query_hint`` is the original Torznab `q=` value the user (or
+        Bookshelf/Readarr) submitted at search time, threaded through
+        ``search_tokens.query`` and ``downloads.query``. Adapters MAY use
+        it to disambiguate the file inside a multi-file item — most
+        notably the IA adapter, where a "no-intro" romset identifier
+        like ``nointro.snes`` resolves to thousands of ZIPs and only the
+        query disambiguates which one. Optional; pass ``None`` when no
+        hint is available. Adapters MUST NOT raise on missing hint.
         """
         ...
 

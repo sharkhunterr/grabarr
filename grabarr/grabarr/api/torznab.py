@@ -391,10 +391,14 @@ async def torznab_api(
             return _torznab_error(900, "search failed", status_code=500)
 
         # Register a pending Download row per result so the *arr client
-        # can later resolve /download/{token}.torrent.
+        # can later resolve /download/{token}.torrent. The composite
+        # query is persisted on each search_token so adapters that
+        # support filename-matching (IA romsets) can use it later.
         results_with_tokens: list[tuple] = []
         for r in results:
-            token = await register_result_token(profile=profile, result=r)
+            token = await register_result_token(
+                profile=profile, result=r, query=composite_q
+            )
             results_with_tokens.append((r, token))
 
         _TORZNAB_ACTIVITY.append({

@@ -32,6 +32,9 @@ class Download(Base):
     title: Mapped[str] = mapped_column(Text, nullable=False)
     author: Mapped[str | None] = mapped_column(Text, nullable=True)
     year: Mapped[int | None] = mapped_column(nullable=True)
+    # Original torznab `q` value carried over from search_tokens. Used by
+    # IA's get_download_info to filename-match inside ROM romsets.
+    query: Mapped[str | None] = mapped_column(Text, nullable=True)
     filename: Mapped[str] = mapped_column(Text, nullable=False)
     size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     content_type: Mapped[str | None] = mapped_column(String(128), nullable=True)

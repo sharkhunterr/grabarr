@@ -137,6 +137,51 @@ def _score_file(entry: dict[str, Any], media_type: MediaType) -> int:
     return 0
 
 
+# --------------------------------------------------------------------------
+# ROM romset filename matching (research §spec.md §"IA romset enhancement")
+#
+# IA items like ``nointro.snes`` carry thousands of ROM files. The format
+# ladder alone (ZIP > 7z > ROM > ISO) selects an arbitrary one. When the
+# user searched for "Super Mario World", we want THAT zip — not the first
+# alphabetical ZIP. Tokenise the filename + query, compute case-folded
+# overlap, break ties with longest-common-prefix, and pick the winner.
+# --------------------------------------------------------------------------
+
+_ROMSET_THRESHOLD = 3  # apply matching only when > N files share the top score
+
+
+def _tokenise(s: str) -> set[str]:
+    """Lowercase, split on non-alphanumeric, drop length-1 tokens.
+
+    "Super Mario World (USA)" → {"super", "mario", "world", "usa"}.
+    """
+    import re
+
+    return {t for t in re.split(r"[^a-z0-9]+", s.lower()) if len(t) > 1}
+
+
+def _filename_match_score(filename: str, query_tokens: set[str]) -> tuple[int, int]:
+    """Return (token-overlap-count, longest-prefix-match-len) for tie break.
+
+    Strip the extension before scoring so "super_mario_world.zip" doesn't
+    pollute the token bag with "zip".
+    """
+    name = filename.rsplit(".", 1)[0] if "." in filename else filename
+    name_tokens = _tokenise(name)
+    overlap = len(name_tokens & query_tokens)
+    # Longest prefix of `name` (lowercased) that occurs as a substring of
+    # any query token. Cheap-but-effective tiebreaker for "Mario Kart"
+    # vs "Mario Kart 64" when both have 2/3 token overlap.
+    low = name.lower()
+    prefix = 0
+    for q in query_tokens:
+        for i in range(min(len(low), len(q)), 0, -1):
+            if low[:i] in q or q[:i] in low:
+                prefix = max(prefix, i)
+                break
+    return overlap, prefix
+
+
 def _media_type_to_ia_query(media_type: MediaType) -> str:
     """Map our MediaType to IA's ``mediatype`` field filter."""
     return {
@@ -287,6 +332,7 @@ class InternetArchiveAdapter:
         self,
         external_id: str,
         media_type: MediaType,
+        query_hint: str | None = None,
     ) -> DownloadInfo:
         await rate_limiter.acquire(self.id, "download")
         try:
@@ -304,18 +350,53 @@ class InternetArchiveAdapter:
             raise AdapterConnectivityError(str(exc)) from exc
 
         files = meta.get("files", [])
-        # Pick the best file per the ladder.
-        best: tuple[int, dict[str, Any]] | None = None
+        # Score every file, keep the top tier.
+        scored: list[tuple[int, dict[str, Any]]] = []
+        top_score = 0
         for entry in files:
             score = _score_file(entry, media_type)
             if score <= 0:
                 continue
-            if best is None or score > best[0]:
-                best = (score, entry)
-        if best is None:
+            scored.append((score, entry))
+            top_score = max(top_score, score)
+        if not scored:
             raise AdapterNotFound(f"no suitable file in IA item {external_id}")
 
-        entry = best[1]
+        # ROM romset path: when there are many files at the same top score
+        # (no-intro / redump packs) AND we have a query hint, pick by
+        # filename overlap with the query. Falls back to the format-only
+        # winner if no token overlaps — which preserves correctness for
+        # legitimate single-ROM IA items.
+        top_tier = [e for s, e in scored if s == top_score]
+        if (
+            media_type == MediaType.GAME_ROM
+            and query_hint
+            and len(top_tier) > _ROMSET_THRESHOLD
+        ):
+            tokens = _tokenise(query_hint)
+            if tokens:
+                ranked = sorted(
+                    top_tier,
+                    key=lambda e: _filename_match_score(e.get("name", ""), tokens),
+                    reverse=True,
+                )
+                head_score = _filename_match_score(ranked[0].get("name", ""), tokens)
+                if head_score[0] > 0:
+                    _log.info(
+                        "IA romset match: %d candidates → %s (overlap=%d prefix=%d)",
+                        len(top_tier), ranked[0].get("name"), head_score[0], head_score[1],
+                    )
+                    entry = ranked[0]
+                else:
+                    # No token overlap with any filename — fall back to
+                    # format-only winner. Keeps single-ROM items working
+                    # even when the query is e.g. just a ROM serial.
+                    entry = top_tier[0]
+            else:
+                entry = top_tier[0]
+        else:
+            # Single-tier or non-ROM: format ladder winner is authoritative.
+            entry = top_tier[0]
         name = entry.get("name", "")
         server = meta.get("server", "archive.org")
         # IA serves item files at https://{server}/{dir}/{name} where

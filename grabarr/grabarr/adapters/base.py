@@ -69,6 +69,7 @@ class SourceAdapter(Protocol):
         self,
         external_id: str,
         media_type: MediaType,
+        query_hint: str | None = None,
     ) -> DownloadInfo: ...
 
     async def health_check(self) -> HealthStatus: ...

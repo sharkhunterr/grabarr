@@ -51,6 +51,7 @@ async def register_result_token(
     *,
     profile: Profile,
     result: SearchResult,
+    query: str | None = None,
 ) -> str:
     """Mint a URL-safe token pointing at a search result.
 
@@ -59,6 +60,11 @@ async def register_result_token(
     real ``downloads`` row when an *arr client actually hits
     ``/torznab/{slug}/download/{token}.torrent``. This keeps the
     downloads page showing ACTUAL grabs, not every search hit.
+
+    ``query`` is the user's original Torznab `q=` value; persisted so
+    later ``prepare_and_generate_torrent`` can forward it to the
+    adapter as ``query_hint`` (used by IA for ROM romset filename
+    matching).
     """
     from grabarr.downloads.search_tokens import SearchToken
 
@@ -75,6 +81,7 @@ async def register_result_token(
                 author=result.author,
                 year=result.year,
                 size_bytes=result.size_bytes,
+                query=query,
             )
         )
     return token
@@ -128,6 +135,7 @@ async def prepare_and_generate_torrent(
                 title=st.title,
                 author=st.author,
                 year=st.year,
+                query=st.query,
                 filename=st.title,  # replaced post-download
                 size_bytes=st.size_bytes,
                 content_type=None,
@@ -146,6 +154,7 @@ async def prepare_and_generate_torrent(
         external_id = dl.external_id
         source_id = dl.source_id
         profile_slug = slug
+        query_hint = dl.query  # extracted before the session closes
         # Resolve modes: profile override → env default.
         profile_row = await session.execute(
             select(Profile).where(Profile.slug == slug)
@@ -173,10 +182,14 @@ async def prepare_and_generate_torrent(
         await _mark_failed(token, f"adapter {source_id!r} is not registered")
         raise DownloadNotFound(f"adapter {source_id} unavailable")
 
-    # 2. Mark resolving, call adapter.get_download_info.
+    # 2. Mark resolving, call adapter.get_download_info. Forward the
+    #    user's original Torznab query as the optional ``query_hint``;
+    #    IA uses it to pick the right file from a multi-ROM romset.
     await _set_status(token, DownloadStatus.RESOLVING)
     try:
-        info = await adapter.get_download_info(external_id, media_type)
+        info = await adapter.get_download_info(
+            external_id, media_type, query_hint=query_hint
+        )
     except AdapterError as exc:
         await _mark_failed(token, f"adapter error: {exc}")
         raise

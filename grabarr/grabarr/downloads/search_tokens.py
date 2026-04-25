@@ -37,6 +37,10 @@ class SearchToken(Base):
     author: Mapped[str | None] = mapped_column(Text, nullable=True)
     year: Mapped[int | None] = mapped_column(nullable=True)
     size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    # Original torznab `q` parameter. Forwarded to adapter.get_download_info
+    # as `query_hint` so the IA adapter can filename-match inside
+    # multi-file ROM romsets.
+    query: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(
         nullable=False, default=lambda: dt.datetime.now(dt.UTC)
     )
