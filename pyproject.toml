@@ -1,6 +1,6 @@
 [project]
 name = "grabarr"
-version = "1.1.0"
+version = "1.1.1"
 description = "Multi-source media indexer and download bridge exposing shadow libraries (Anna's Archive, LibGen, Z-Library, Internet Archive) as standard Torznab indexers for the *arr ecosystem."
 readme = "README.md"
 requires-python = ">=3.12"
