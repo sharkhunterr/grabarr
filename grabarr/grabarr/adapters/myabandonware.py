@@ -235,9 +235,9 @@ def _parse_search_html(
                 if yt.isdigit() and 1970 <= int(yt) <= 2099:
                     year = int(yt)
         seen.add(slug)
-        score = 50.0
-        if query.lower() in title_text.lower():
-            score += 25.0
+        from grabarr.adapters._rom_helpers import score_title_relevance
+
+        score = 50.0 + score_title_relevance(title_text, query)
         # Approximate size: most abandonware archives are 100 KB – 50 MB,
         # median ~5 MB. Stops Prowlarr / Bookshelf rendering "0 B".
         out.append(
@@ -260,6 +260,5 @@ def _parse_search_html(
                 },
             )
         )
-        if len(out) >= limit:
-            break
-    return out
+    out.sort(key=lambda r: r.quality_score, reverse=True)
+    return out[:limit]

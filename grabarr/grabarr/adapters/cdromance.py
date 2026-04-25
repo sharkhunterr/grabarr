@@ -370,9 +370,9 @@ def _parse_search_html(
         sys_label = _SYSTEM_LABEL.get(
             console_slug, console_slug.replace("-", " ").title()
         )
-        score = 50.0
-        if query.lower() in title_text.lower():
-            score += 25.0
+        from grabarr.adapters._rom_helpers import score_title_relevance
+
+        score = 50.0 + score_title_relevance(title_text, query)
         if version_label in {"Hack", "Pirate"}:
             score -= 15.0
         out.append(
@@ -397,6 +397,5 @@ def _parse_search_html(
                 },
             )
         )
-        if len(out) >= limit:
-            break
-    return out
+    out.sort(key=lambda r: r.quality_score, reverse=True)
+    return out[:limit]

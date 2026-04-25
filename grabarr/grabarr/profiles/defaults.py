@@ -34,6 +34,7 @@ def _src(
     *,
     timeout: int = 60,
     skip_if_member_required: bool = False,
+    max_results: int = 20,
 ) -> dict[str, Any]:
     return {
         "source_id": source_id,
@@ -41,6 +42,7 @@ def _src(
         "timeout_seconds": timeout,
         "enabled": True,
         "skip_if_member_required": skip_if_member_required,
+        "max_results": max_results,
     }
 
 
@@ -97,15 +99,17 @@ DEFAULT_PROFILES: list[dict[str, Any]] = [
         ),
         "media_type": MediaType.GAME_ROM.value,
         "sources": [
-            _src("vimm", 1.2),
-            _src("edge_emulation", 1.0),
+            # max_results=30 per source so a deep query like "crash team
+            # racing" surfaces enough alternates per platform.
+            _src("vimm", 1.2, max_results=30),
+            _src("edge_emulation", 1.0, max_results=30),
             # The three Chromium-driven sources (RomsFun, CDRomance,
             # MyAbandonware) each spin a real browser per grab — bump
             # their per-call timeout to 120 s.
-            _src("romsfun", 0.9, timeout=120),
-            _src("cdromance", 0.85, timeout=120),
-            _src("myabandonware", 0.7, timeout=120),
-            _src("internet_archive", 0.8, timeout=90),
+            _src("romsfun", 0.9, timeout=120, max_results=30),
+            _src("cdromance", 0.85, timeout=120, max_results=30),
+            _src("myabandonware", 0.7, timeout=120, max_results=30),
+            _src("internet_archive", 0.8, timeout=90, max_results=30),
         ],
         "filters": _filters(),
         "mode": ProfileMode.AGGREGATE_ALL.value,

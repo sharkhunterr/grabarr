@@ -98,10 +98,11 @@ _VIMM_SYSTEMS: dict[str, str] = {
     "CDi": "Philips CD-i",
 }
 
-# A reasonable default cross-section so a fresh "Mario" query returns
-# something even if the operator hasn't pinned a system. We avoid the
-# massive PS3/Xbox360 sets which are slow and rarely what *arr clients
-# want by default. Operators override via sources.vimm.systems.
+# Default cross-section so a fresh query returns hits even when the
+# operator hasn't pinned a system. Covers Nintendo + Sega + the main
+# CD-based consoles. PS3/Xbox360 are excluded because their listings
+# are huge and slow to scan and rarely what *arr clients want by
+# default. Operators override via the `sources.vimm.systems` setting.
 _DEFAULT_SYSTEMS = (
     "NES",
     "SNES",
@@ -113,6 +114,11 @@ _DEFAULT_SYSTEMS = (
     "GameCube",
     "Wii",
     "Genesis",
+    "PS1",
+    "PS2",
+    "PSP",
+    "Saturn",
+    "Dreamcast",
 )
 
 # Region flag → ISO 639-1 hint. The vault doesn't expose the language
@@ -572,10 +578,10 @@ def _parse_vimm_list(
                 bt = (sib.get("title") or sib.get_text(strip=True) or "").strip()
                 if bt:
                     version_label = bt[:24]
-        # Quality score: substring match boosts the row.
-        score = 50.0
-        if query.lower() in title.lower():
-            score += 25.0
+        # Quality score: tiered relevance + version penalty.
+        from grabarr.adapters._rom_helpers import score_title_relevance
+
+        score = 50.0 + score_title_relevance(title, query)
         if version_label in ("Pirate", "Hack"):
             score -= 15.0
         out.append(
@@ -603,9 +609,8 @@ def _parse_vimm_list(
                 },
             )
         )
-        if len(out) >= limit:
-            break
-    return out
+    out.sort(key=lambda r: r.quality_score, reverse=True)
+    return out[:limit]
 
 
 def _is_vimm_url(url: str) -> bool:

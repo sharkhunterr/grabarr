@@ -356,10 +356,15 @@ def _parse_edge_results(
         if not clean_title:
             clean_title = title
 
-        score = 50.0
+        from grabarr.adapters._rom_helpers import score_title_relevance
+
         decoded_name = unquote(encoded_name)
-        if query.lower() in title.lower() or query.lower() in decoded_name.lower():
-            score += 25.0
+        # Score against the prettier "summary" title; fall back to the
+        # filename so partial-name matches still bubble up.
+        score = 50.0 + max(
+            score_title_relevance(title, query),
+            score_title_relevance(decoded_name, query),
+        )
         if version_label in {"Hack", "Pirate"}:
             score -= 15.0
 
@@ -385,9 +390,10 @@ def _parse_edge_results(
                 },
             )
         )
-        if len(out) >= limit:
-            break
-    return out
+    # Sort by quality_score desc so the most relevant rows survive
+    # the per-source `limit` cap.
+    out.sort(key=lambda r: r.quality_score, reverse=True)
+    return out[:limit]
 
 
 # ----- filename-tag parsing -------------------------------------------------

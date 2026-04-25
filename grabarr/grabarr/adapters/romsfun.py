@@ -55,27 +55,104 @@ _log = setup_logger(__name__)
 
 _RFUN_BASE = "https://romsfun.com"
 _DETAIL_RE = re.compile(r"^https?://romsfun\.com/roms/([a-z0-9-]+)/([a-z0-9-]+)\.html$")
+# Per-console size estimate (bytes). Used as a search-time placeholder
+# so Prowlarr doesn't render "0 B"; the real size comes from the
+# Content-Length response header during the actual download.
+# RomsFun's URL slugs use full English names ("playstation",
+# "playstation-2") rather than scene abbreviations. Keep both forms
+# so older/newer URL patterns both resolve.
+_TYPICAL_SIZE: dict[str, int] = {
+    # Nintendo
+    "nes": 256 * 1024,
+    "snes": 1 * 1024 ** 2,
+    "super-nintendo": 1 * 1024 ** 2,
+    "n64": 16 * 1024 ** 2,
+    "nintendo-64": 16 * 1024 ** 2,
+    "gameboy": 256 * 1024,
+    "gbc": 512 * 1024,
+    "gameboy-color": 512 * 1024,
+    "gba": 16 * 1024 ** 2,
+    "gameboy-advance": 16 * 1024 ** 2,
+    "nds": 64 * 1024 ** 2,
+    "nintendo-ds": 64 * 1024 ** 2,
+    "3ds": 1024 * 1024 ** 2,
+    "nintendo-3ds": 1024 * 1024 ** 2,
+    "gamecube": 1400 * 1024 ** 2,
+    "wii": 4400 * 1024 ** 2,
+    "wiiu": 8 * 1024 ** 3,
+    "nintendo-switch": 16 * 1024 ** 3,
+    # PlayStation family
+    "ps1": 600 * 1024 ** 2,
+    "playstation": 600 * 1024 ** 2,
+    "ps2": 4400 * 1024 ** 2,
+    "playstation-2": 4400 * 1024 ** 2,
+    "ps3": 25 * 1024 ** 3,
+    "playstation-3": 25 * 1024 ** 3,
+    "ps4": 50 * 1024 ** 3,
+    "playstation-4": 50 * 1024 ** 3,
+    "psp": 1700 * 1024 ** 2,
+    "playstation-portable": 1700 * 1024 ** 2,
+    "psvita": 4 * 1024 ** 3,
+    "playstation-vita": 4 * 1024 ** 3,
+    # Sega
+    "genesis": 1 * 1024 ** 2,
+    "mega-drive": 1 * 1024 ** 2,
+    "saturn": 600 * 1024 ** 2,
+    "sega-saturn": 600 * 1024 ** 2,
+    "dreamcast": 1024 * 1024 ** 2,
+    "sega-dreamcast": 1024 * 1024 ** 2,
+    # Microsoft
+    "xbox": 4400 * 1024 ** 2,
+    "xbox-360": 8 * 1024 ** 3,
+    "xbox-one": 50 * 1024 ** 3,
+    # Atari + retro
+    "atari-2600": 32 * 1024,
+    "atari-7800": 64 * 1024,
+    "neogeo": 32 * 1024 ** 2,
+    "neo-geo": 32 * 1024 ** 2,
+}
 # Per-system pretty label for the [<system>] suffix in result titles.
 _SYSTEM_LABEL: dict[str, str] = {
     "nes": "NES",
     "snes": "SNES",
+    "super-nintendo": "SNES",
     "n64": "N64",
-    "gamecube": "GameCube",
-    "wii": "Wii",
+    "nintendo-64": "N64",
     "gameboy": "GB",
     "gbc": "GBC",
+    "gameboy-color": "GBC",
     "gba": "GBA",
+    "gameboy-advance": "GBA",
     "nds": "NDS",
+    "nintendo-ds": "NDS",
     "3ds": "3DS",
-    "genesis": "Genesis",
-    "saturn": "Saturn",
-    "dreamcast": "Dreamcast",
+    "nintendo-3ds": "3DS",
+    "gamecube": "GameCube",
+    "wii": "Wii",
+    "wiiu": "Wii U",
+    "nintendo-switch": "Switch",
+    "playstation": "PS1",
     "ps1": "PS1",
+    "playstation-2": "PS2",
     "ps2": "PS2",
+    "playstation-3": "PS3",
+    "playstation-4": "PS4",
+    "playstation-portable": "PSP",
     "psp": "PSP",
+    "playstation-vita": "PSVita",
+    "genesis": "Genesis",
+    "mega-drive": "Genesis",
+    "saturn": "Saturn",
+    "sega-saturn": "Saturn",
+    "dreamcast": "Dreamcast",
+    "sega-dreamcast": "Dreamcast",
+    "xbox": "Xbox",
+    "xbox-360": "Xbox 360",
+    "xbox-one": "Xbox One",
     "atari-2600": "Atari 2600",
     "atari-7800": "Atari 7800",
     "neogeo": "Neo Geo",
+    "neo-geo": "Neo Geo",
 }
 
 
@@ -259,7 +336,28 @@ class RomsFunAdapter:
         )
 
     def get_config_schema(self) -> ConfigSchema:
-        return ConfigSchema(fields=[])
+        from grabarr.adapters.base import ConfigField
+
+        return ConfigSchema(
+            fields=[
+                ConfigField(
+                    key="sources.romsfun.system_overrides",
+                    label="Console label / size overrides (JSON)",
+                    field_type="text",
+                    options=None,
+                    secret=False,
+                    required=False,
+                    help_text=(
+                        'JSON object merged on top of the built-in '
+                        'console-slug → label map, e.g. '
+                        '{"my-new-slug": "Pretty Name"}. Same JSON also '
+                        'overrides the per-system size estimate when an '
+                        'integer value is provided. Leave empty to use '
+                        'the built-in defaults only.'
+                    ),
+                ),
+            ]
+        )
 
     async def get_quota_status(self) -> QuotaStatus | None:
         return None
@@ -289,6 +387,10 @@ def _parse_search_html(
     ``/roms/<console>/<slug>.html`` (one wrapping the cover image, one
     wrapping the title text). We dedupe by external_id.
     """
+    from grabarr.adapters._rom_helpers import settings_overlay
+
+    label_map = settings_overlay("sources.romsfun.system_overrides", _SYSTEM_LABEL)
+    size_map = settings_overlay("sources.romsfun.system_overrides", _TYPICAL_SIZE)
     soup = BeautifulSoup(html, "lxml")
     seen: set[str] = set()
     out: list[SearchResult] = []
@@ -309,9 +411,12 @@ def _parse_search_html(
         if not title_text:
             continue
         seen.add(external_id)
-        sys_label = _SYSTEM_LABEL.get(
-            console_slug, console_slug.replace("-", " ").title()
-        )
+        # Operator-overrideable label / size lookups.
+        sys_label_value = label_map.get(console_slug)
+        if isinstance(sys_label_value, str) and sys_label_value:
+            sys_label = sys_label_value
+        else:
+            sys_label = console_slug.replace("-", " ").title()
         # Tag promotion from in-title parentheses.
         version_label: str | None = None
         for kw in ("Hack", "Pirate", "Beta", "Demo", "Proto", "Translation"):
@@ -329,9 +434,9 @@ def _parse_search_html(
         clean_title = re.sub(r"\s*\([^)]*\)\s*", " ", title_text).strip()
         if not clean_title:
             clean_title = title_text
-        score = 50.0
-        if query.lower() in title_text.lower():
-            score += 25.0
+        from grabarr.adapters._rom_helpers import score_title_relevance
+
+        score = 50.0 + score_title_relevance(title_text, query)
         if version_label in {"Hack", "Pirate"}:
             score -= 15.0
         out.append(
@@ -342,7 +447,11 @@ def _parse_search_html(
                 year=None,
                 format="rom",
                 language=None,
-                size_bytes=None,
+                size_bytes=(
+                    size_map.get(console_slug)
+                    if isinstance(size_map.get(console_slug), int)
+                    else None
+                ),
                 quality_score=score,
                 source_id=source_id,
                 media_type=MediaType.GAME_ROM,
@@ -352,9 +461,11 @@ def _parse_search_html(
                     "console_label": sys_label,
                     "region_label": region_label,
                     "version_label": version_label,
+                    "size_is_estimate": True,
                 },
             )
         )
-        if len(out) >= limit:
-            break
-    return out
+    # Keep the highest-scoring `limit` entries — substring/exact-title
+    # matches outrank fuzzy hits, so the top N are the most relevant.
+    out.sort(key=lambda r: r.quality_score, reverse=True)
+    return out[:limit]

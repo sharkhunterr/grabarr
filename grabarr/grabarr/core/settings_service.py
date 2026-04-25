@@ -42,6 +42,15 @@ _ALLOWED_KEYS: frozenset[str] = frozenset(
         "notifications.flap_cooldown_minutes",
         "sources.anna_archive.aa_base_url",
         "sources.anna_archive.aa_mirror_urls",
+        # ROM source overrides — JSON-encoded {slug: label} maps so
+        # operators can extend the per-adapter system / region tables
+        # without redeploying. Empty value = use built-in defaults only.
+        "sources.vimm.systems",
+        "sources.vimm.system_overrides",
+        "sources.romsfun.system_overrides",
+        "sources.cdromance.system_overrides",
+        "sources.edge_emulation.system_overrides",
+        "sources.myabandonware.system_overrides",
         "network.use_doh",
         "network.custom_dns",
         "server.public_base_url",
