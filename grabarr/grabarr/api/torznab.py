@@ -14,7 +14,20 @@ import hashlib
 from email.utils import format_datetime
 from typing import Any
 from urllib.parse import quote
-from xml.sax.saxutils import escape as xml_escape
+from xml.sax.saxutils import escape as _sax_escape
+
+
+def xml_escape(value: object) -> str:
+    """Escape ``< > & " '`` so the result is safe inside both element
+    content and attribute values.
+
+    ``xml.sax.saxutils.escape`` only escapes ``< > &`` by default —
+    leaving raw double-quotes inside ``value="…"`` attributes broke
+    Prowlarr's XML parser ("'<word>' is an unexpected token") whenever
+    a search hit's title contained a quoted word, which IA / RomsFun
+    titles do regularly.
+    """
+    return _sax_escape(str(value), {'"': "&quot;", "'": "&apos;"})
 
 from pathlib import Path
 
