@@ -2,6 +2,7 @@
 
 Covers:
   - Vimm's Lair search HTML parser + media[]-array download resolution
+  - Edge Emulation POST search + direct /download URL extraction
 
 The Internet Archive romset enhancement is tested separately in
 ``test_ia_romset.py``.
@@ -15,6 +16,11 @@ import httpx
 import pytest
 import respx
 
+from grabarr.adapters.edge_emulation import (
+    EdgeEmulationAdapter,
+    _parse_edge_results,
+    _parse_size_edge,
+)
 from grabarr.adapters.vimm import (
     VimmsLairAdapter,
     _decode_b64_filename,
@@ -119,3 +125,92 @@ async def test_vimm_get_download_info_resolves_media_id() -> None:
     assert info.filename_hint == "Dr. Mario.nes"
     assert info.size_bytes == 28 * 1024
     assert info.extra_headers.get("Referer") == "https://vimm.net/vault/287"
+
+
+# --------------------------------------------------------------------------
+# Edge Emulation
+# --------------------------------------------------------------------------
+
+
+_EDGE_RESULTS = (
+    '<html><body><div class="grid">'
+    '<div class="item"><details data-name="Super Mario 64 (USA).zip">'
+    '<summary>Super Mario 64 (USA)</summary>'
+    '<p><a href="/download/nintendo-64/Super%20Mario%2064%20%28USA%29.zip">'
+    'download</a> (<span>5.95m, 1431 DLs</span>)</p>'
+    '<p>system: <span>Nintendo 64</span></p>'
+    '<p>unpacked size: <span>8.00m</span></p>'
+    '</details></div>'
+    '<div class="item"><details data-name="Mario Kart 64 (USA).zip">'
+    '<summary>Mario Kart 64 (USA)</summary>'
+    '<p><a href="/download/nintendo-64/Mario%20Kart%2064%20%28USA%29.zip">'
+    'download</a> (<span>8.57m, 641 DLs</span>)</p>'
+    '<p>system: <span>Nintendo 64</span></p>'
+    '</details></div>'
+    '</div></body></html>'
+)
+
+
+def test_edge_parse_size() -> None:
+    assert _parse_size_edge("5.95m") == int(5.95 * 1024 ** 2)
+    assert _parse_size_edge("948.52k") == int(948.52 * 1024)
+    assert _parse_size_edge("1.00g") == 1024 ** 3
+    assert _parse_size_edge("") is None
+    assert _parse_size_edge("garbage") is None
+
+
+def test_edge_parse_results() -> None:
+    results = _parse_edge_results(_EDGE_RESULTS, "mario", "edge_emulation", limit=10)
+    assert len(results) == 2
+    first = results[0]
+    assert first.external_id == "nintendo-64/Super%20Mario%2064%20%28USA%29.zip"
+    assert first.title.startswith("Super Mario 64")
+    assert first.title.endswith("[N64]")  # _EDGE_SYSTEM_LABEL
+    assert first.format == "zip"
+    assert first.size_bytes == int(5.95 * 1024 ** 2)
+    assert first.quality_score >= 50
+    assert first.metadata["edge_filename"] == "Super Mario 64 (USA).zip"
+
+
+@pytest.mark.asyncio
+async def test_edge_search_posts_form() -> None:
+    adapter = EdgeEmulationAdapter()
+    with respx.mock(assert_all_called=False) as mock:
+        route = mock.post("https://edgeemu.net/search.php").mock(
+            return_value=httpx.Response(200, text=_EDGE_RESULTS)
+        )
+        results = await adapter.search("mario", MediaType.GAME_ROM, SearchFilters(), limit=10)
+    assert results
+    # Confirm the POST body shape.
+    request = route.calls[-1].request
+    assert b"search=mario" in request.content
+    assert b"system=all" in request.content
+
+
+@pytest.mark.asyncio
+async def test_edge_get_download_info_builds_url() -> None:
+    adapter = EdgeEmulationAdapter()
+    info = await adapter.get_download_info(
+        "nintendo-64/Super%20Mario%2064%20%28USA%29.zip", MediaType.GAME_ROM
+    )
+    assert info.download_url == (
+        "https://edgeemu.net/download/nintendo-64/Super%20Mario%2064%20%28USA%29.zip"
+    )
+    assert info.filename_hint == "Super Mario 64 (USA).zip"
+
+
+@pytest.mark.asyncio
+async def test_edge_search_pins_system_via_hint() -> None:
+    adapter = EdgeEmulationAdapter()
+    with respx.mock(assert_all_called=False) as mock:
+        route = mock.post("https://edgeemu.net/search.php").mock(
+            return_value=httpx.Response(200, text=_EDGE_RESULTS)
+        )
+        await adapter.search(
+            "mario system:nintendo-snes", MediaType.GAME_ROM, SearchFilters(), limit=5
+        )
+    body = route.calls[-1].request.content
+    # The hint stripped from query, system pinned in the form body.
+    assert b"system=nintendo-snes" in body
+    assert b"search=mario" in body
+    assert b"system:nintendo-snes" not in body  # hint not leaked into search field
