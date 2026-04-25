@@ -1,0 +1,48 @@
+{
+  "name": "grabarr",
+  "version": "1.0.0",
+  "description": "Multi-source media indexer and download bridge exposing shadow libraries (Anna's Archive, LibGen, Z-Library, Internet Archive) plus ROM sources (Vimm, Edge Emulation, RomsFun, CDRomance, MyAbandonware) as standard Torznab indexers for the *arr ecosystem.",
+  "private": true,
+  "scripts": {
+    "release": "node scripts/release.js",
+    "release:patch": "node scripts/release.js patch",
+    "release:minor": "node scripts/release.js minor",
+    "release:major": "node scripts/release.js major",
+    "release:github": "node scripts/release.js --github",
+    "release:deploy": "node scripts/release.js --deploy",
+    "release:full": "node scripts/release.js --github --deploy",
+    "release:dry": "node scripts/release.js --dry-run",
+    "push": "node scripts/push.js",
+    "push:github": "node scripts/push.js --github",
+    "push:all": "node scripts/push.js --all",
+    "push:tags": "node scripts/push.js --tags-only",
+    "docker:build": "node scripts/docker-deploy.js",
+    "docker:deploy": "node scripts/docker-deploy.js --push",
+    "docker:deploy:multi": "node scripts/docker-deploy.js --push --multi-platform"
+  },
+  "devDependencies": {
+    "standard-version": "^9.5.0"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "python": ">=3.12.0"
+  },
+  "config": {
+    "dockerImage": "sharkhunterr/grabarr",
+    "dockerRegistry": "docker.io"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sharkhunterr/grabarr"
+  },
+  "keywords": [
+    "torznab",
+    "arr",
+    "prowlarr",
+    "indexer",
+    "bittorrent",
+    "rom-downloader",
+    "shadow-library"
+  ],
+  "license": "GPL-3.0-or-later"
+}

@@ -58,50 +58,50 @@ clean:  ## Remove build/cache artefacts
 	find . -type d -name __pycache__ -exec rm -rf {} +
 
 # ---------------------------------------------------------------------------
-# Release pipeline (ports Ghostarr's npm-run-release-full UX). All commands
-# run scripts/release.py which bumps the version, regenerates CHANGELOG.md,
-# tags + pushes. The release pipeline in .gitlab-ci.yml is TAG-ONLY, so the
-# only way to trigger CI is via these targets.
+# Release pipeline — thin wrappers around the npm scripts ported from
+# Ghostarr (sharkhunterr/ghostarr). The canonical entry point is
+# `npm run release:full`; these targets are kept for muscle memory and
+# accept the same suffixes. Full doc: scripts/README.md.
 # ---------------------------------------------------------------------------
 
 release:  ## Patch release on GitLab only (X.Y.Z → X.Y.Z+1)
-	uv run python scripts/release.py patch
+	npm run release
 
 release-minor:  ## Minor release on GitLab only (X.Y.Z → X.Y+1.0)
-	uv run python scripts/release.py minor
+	npm run release:minor
 
 release-major:  ## Major release on GitLab only (X.Y.Z → X+1.0.0)
-	uv run python scripts/release.py major
+	npm run release:major
 
 release-github:  ## Patch release on GitLab + GitHub (no Docker Hub)
-	uv run python scripts/release.py patch --github
+	npm run release:github
 
 release-deploy:  ## Patch release + trigger Docker Hub publish via CI
-	uv run python scripts/release.py patch --deploy
+	npm run release:deploy
 
 release-full:  ## Patch release + GitLab + GitHub + Docker Hub
-	uv run python scripts/release.py patch --github --deploy
+	npm run release:full
 
 release-dry:  ## Dry-run a release (prints what would happen)
-	uv run python scripts/release.py patch --dry-run
+	npm run release:dry
 
 push:  ## Push branch + tags to GitLab (origin)
-	uv run python scripts/push.py
+	npm run push
 
 push-github:  ## Push branch + tags to GitHub remote
-	uv run python scripts/push.py --github
+	npm run push:github
 
 push-all:  ## Push branch + tags to both remotes
-	uv run python scripts/push.py --all
+	npm run push:all
 
 push-tags:  ## Push only tags to both remotes
-	uv run python scripts/push.py --all --tags-only
+	npm run push:tags
 
 docker-build:  ## Build the Docker image locally (no push)
-	uv run python scripts/docker_deploy.py
+	npm run docker:build
 
 docker-deploy:  ## Build + push Docker image to Docker Hub (linux/amd64)
-	uv run python scripts/docker_deploy.py --push
+	npm run docker:deploy
 
 docker-deploy-multi:  ## Build + push multi-arch (amd64 + arm64) to Docker Hub
-	uv run python scripts/docker_deploy.py --push --multi-platform
+	npm run docker:deploy:multi
