@@ -131,11 +131,15 @@ DEFAULT_PROFILES: list[dict[str, Any]] = [
     {
         "slug": "music_general",
         "name": "Music General",
-        "description": "Aggregate-mode music search combining AA and Internet Archive's etree.",
+        "description": (
+            "Aggregate music search across AA, Internet Archive's "
+            "etree (live music), and KHInsider (video-game OSTs)."
+        ),
         "media_type": MediaType.MUSIC.value,
         "sources": [
             _src("anna_archive", 1.0),
             _src("internet_archive", 0.9),
+            _src("khinsider", 0.8, max_results=30),
         ],
         "filters": _filters(preferred_formats=["flac", "mp3"]),
         "mode": ProfileMode.AGGREGATE_ALL.value,
