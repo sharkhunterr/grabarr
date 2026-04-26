@@ -78,14 +78,19 @@ DEFAULT_PROFILES: list[dict[str, Any]] = [
     {
         "slug": "ebooks_public_domain",
         "name": "Ebooks — Public Domain",
-        "description": "Public-domain-first: Internet Archive + LibGen, capped at 1929.",
+        "description": (
+            "Public-domain-first: Project Gutenberg + Standard Ebooks "
+            "(retypeset classics) + Internet Archive + LibGen capped at 1929."
+        ),
         "media_type": MediaType.EBOOK.value,
         "sources": [
-            _src("internet_archive", 1.5),
-            _src("libgen", 0.9),
+            _src("gutenberg", 1.4, max_results=30),
+            _src("standard_ebooks", 1.3, max_results=30),
+            _src("internet_archive", 1.0),
+            _src("libgen", 0.7),
         ],
         "filters": _filters(max_year=1929),
-        "mode": ProfileMode.FIRST_MATCH.value,
+        "mode": ProfileMode.AGGREGATE_ALL.value,
         "newznab_categories": [7020],
     },
     {
