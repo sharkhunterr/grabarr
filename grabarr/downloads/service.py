@@ -17,6 +17,7 @@ media_type)`` tuple keyed by a random token. Later the *arr client hits
 from __future__ import annotations
 
 import datetime as dt
+import re
 import secrets
 from pathlib import Path
 
@@ -195,6 +196,17 @@ async def prepare_and_generate_torrent(
         raise
     await _annotate_resolve(token, size=info.size_bytes, content_type=info.content_type)
 
+    # 2b. Magnet passthrough: a torrent-only source (e.g. AudioBookBay)
+    # returned a magnet URI. Skip HTTP fetch + .torrent generation; the
+    # torznab download endpoint will emit a 302 redirect that Prowlarr
+    # forwards to the *arr client and then to the torrent client.
+    if info.magnet_uri:
+        return await _finalise_magnet_passthrough(
+            token=token,
+            magnet_uri=info.magnet_uri,
+            filename_hint=info.filename_hint,
+        )
+
     # 3. Download (sync/async_streaming/hybrid per the resolved mode).
     await _set_status(token, DownloadStatus.DOWNLOADING)
     expected_format = _format_from_filename_hint(info.filename_hint) or None
@@ -321,6 +333,83 @@ def _rebuild_blob(
         announce_url=announce_url,
         webseed_url=webseed_url,
         display_name=path.name,
+    )
+
+
+_MAGNET_HASH_RE = re.compile(r"xt=urn:btih:([a-fA-F0-9]{40}|[A-Z2-7]{32})")
+
+
+def _extract_info_hash_from_magnet(magnet: str) -> str | None:
+    """Pull the 40-char hex info_hash from a magnet URI.
+
+    Magnets carry the hash as either ``xt=urn:btih:<40 hex>`` or
+    ``xt=urn:btih:<32 base32>`` (BEP-9). We normalise to lowercase hex.
+    Returns ``None`` if the magnet doesn't match either form — caller
+    falls back to an all-zero placeholder so the Download row's
+    info_hash column is non-NULL.
+    """
+    import base64
+
+    m = _MAGNET_HASH_RE.search(magnet)
+    if not m:
+        return None
+    raw = m.group(1)
+    if len(raw) == 40:
+        return raw.lower()
+    try:
+        return base64.b32decode(raw).hex()
+    except (ValueError, TypeError):
+        return None
+
+
+async def _finalise_magnet_passthrough(
+    *,
+    token: str,
+    magnet_uri: str,
+    filename_hint: str,
+) -> GeneratedTorrent:
+    """Persist a magnet-only download row and return a redirectable blob.
+
+    Used by torrent-only sources (AudioBookBay) that can't be funnelled
+    through the HTTP→.torrent pipeline. The Download row lands in
+    ``COMPLETED`` with no file_path; the torznab download endpoint sees
+    ``GeneratedTorrent.magnet_uri`` and emits an HTTP 302 to the magnet.
+    """
+    info_hash = _extract_info_hash_from_magnet(magnet_uri) or ("0" * 40)
+
+    now = dt.datetime.now(dt.UTC)
+    async with session_scope() as session:
+        # Detach any other Download rows still claiming this info_hash —
+        # the same UNIQUE-by-info_hash protection the regular flow has.
+        await session.execute(
+            update(Download)
+            .where(Download.info_hash == info_hash, Download.token != token)
+            .values(info_hash=None, status=DownloadStatus.COMPLETED.value)
+        )
+        await session.execute(
+            delete(Torrent).where(Torrent.info_hash == info_hash)
+        )
+        row = await session.execute(select(Download).where(Download.token == token))
+        dl = row.scalar_one()
+        dl.filename = filename_hint or "audiobook.torrent"
+        dl.info_hash = info_hash
+        dl.torrent_mode = TorrentMode.WEBSEED.value  # accounting only
+        dl.status = DownloadStatus.COMPLETED.value
+        dl.resolved_at = now
+        dl.ready_at = now
+        dl.seeded_at = now
+        # No file on disk — magnet is handed off to the user's torrent
+        # client which fetches the data via DHT/peers.
+        dl.file_path = None
+        dl.magic_verified = True
+
+    return GeneratedTorrent(
+        bencoded=b"",
+        info_hash=info_hash,
+        piece_count=0,
+        piece_size=0,
+        mode=TorrentMode.WEBSEED,
+        magnet_uri=magnet_uri,
     )
 
 

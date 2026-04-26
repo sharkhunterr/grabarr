@@ -171,6 +171,7 @@ _SOURCE_LABEL: dict[str, str] = {
     "gutenberg": "Project Gutenberg",
     "standard_ebooks": "Standard Ebooks",
     "khinsider": "KHInsider",
+    "audiobookbay": "AudioBookBay",
 }
 
 
@@ -510,6 +511,21 @@ async def torznab_download(slug: str, token_ext: str, request: Request) -> Respo
         )
     except DownloadNotFound:
         raise HTTPException(status_code=404, detail="token not found or expired") from None
+
+    # Magnet passthrough for torrent-only sources (AudioBookBay): the
+    # adapter handed back a magnet URI instead of an HTTP file. Emit a
+    # 302 redirect — Prowlarr / *arr / the torrent client follow magnet
+    # URIs natively.
+    if blob.magnet_uri:
+        return Response(
+            status_code=302,
+            headers={
+                "Location": blob.magnet_uri,
+                "X-Grabarr-Info-Hash": blob.info_hash,
+                "X-Grabarr-Torrent-Mode": "magnet",
+            },
+        )
+
     return Response(
         content=blob.bencoded,
         media_type="application/x-bittorrent",

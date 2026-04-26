@@ -65,14 +65,18 @@ DEFAULT_PROFILES: list[dict[str, Any]] = [
     {
         "slug": "audiobooks_general",
         "name": "Audiobooks General",
-        "description": "Audiobooks via AA slow cascade and Internet Archive's LibriVox.",
+        "description": (
+            "Audiobooks via AudioBookBay (magnet passthrough), AA slow "
+            "cascade, and Internet Archive's LibriVox."
+        ),
         "media_type": MediaType.AUDIOBOOK.value,
         "sources": [
-            _src("anna_archive", 1.2, timeout=120),
-            _src("internet_archive", 0.9),
+            _src("audiobookbay", 1.4, max_results=30),
+            _src("anna_archive", 1.0, timeout=120),
+            _src("internet_archive", 0.8),
         ],
         "filters": _filters(preferred_formats=["mp3", "m4b"]),
-        "mode": ProfileMode.FIRST_MATCH.value,
+        "mode": ProfileMode.AGGREGATE_ALL.value,
         "newznab_categories": [3030],
     },
     {

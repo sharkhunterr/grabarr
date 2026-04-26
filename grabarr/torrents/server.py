@@ -20,13 +20,22 @@ _log = setup_logger(__name__)
 
 @dataclass(frozen=True)
 class GeneratedTorrent:
-    """Uniform return type from :func:`generate_torrent` across modes."""
+    """Uniform return type from :func:`generate_torrent` across modes.
+
+    When ``magnet_uri`` is non-None the torrent comes from a magnet-only
+    source (e.g. AudioBookBay): ``bencoded`` is empty bytes, ``mode`` is
+    ``WEBSEED`` for accounting purposes, and the torznab download
+    endpoint emits an HTTP 302 redirect to the magnet instead of
+    serving torrent bytes. Most fields below are best-effort in that
+    case (info_hash extracted from the magnet, piece_count = 0).
+    """
 
     bencoded: bytes
     info_hash: str
     piece_count: int
     piece_size: int
     mode: TorrentMode
+    magnet_uri: str | None = None
 
 
 def generate_torrent(
