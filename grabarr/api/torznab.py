@@ -170,6 +170,7 @@ _SOURCE_LABEL: dict[str, str] = {
     "myabandonware": "MyAbandonware",
     "gutenberg": "Project Gutenberg",
     "standard_ebooks": "Standard Ebooks",
+    "khinsider": "KHInsider",
 }
 
 
