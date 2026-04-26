@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.2.0](https://github.com/sharkhunterr/grabarr/-/compare/v1.1.4...v1.2.0) (2026-04-26)
+
+
+### Features
+
+* **adapters:** AudioBookBay via magnet passthrough ([bc92a74](https://github.com/sharkhunterr/grabarr/-/commit/bc92a747407eec6202da1f6722d22d3b9a77ef3b))
+* **adapters:** KHInsider source — video-game soundtracks ([9d237a4](https://github.com/sharkhunterr/grabarr/-/commit/9d237a4eb540bd5df53703719b8c9cf2ba03e4b8))
+* **adapters:** Project Gutenberg + Standard Ebooks (public-domain books) ([3c2e5fa](https://github.com/sharkhunterr/grabarr/-/commit/3c2e5fa316f5a921ad8c0bb318d07aa39c12ec28))
+
 ### [1.1.4](https://github.com/sharkhunterr/grabarr/-/compare/v1.1.3...v1.1.4) (2026-04-25)
 
 ### [1.1.3](https://github.com/sharkhunterr/grabarr/-/compare/v1.1.2...v1.1.3) (2026-04-25)
