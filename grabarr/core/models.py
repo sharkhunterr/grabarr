@@ -76,7 +76,7 @@ class SearchResult:
 class DownloadInfo:
     """What ``adapter.get_download_info()`` returns.
 
-    Two mutually exclusive delivery modes:
+    Three mutually exclusive delivery modes:
 
     - **URL mode** (default): ``download_url`` is a plain HTTP(S) URL that
       Grabarr's ``sync_download`` / ``streaming_download`` will fetch with
@@ -87,6 +87,13 @@ class DownloadInfo:
       which handles CF bypass + mirror rotation + retries natively).
       When set, ``download_url`` should be a ``file://`` placeholder and
       ``sync_download`` copies the file instead of making an HTTP call.
+    - **Magnet passthrough mode**: ``magnet_uri`` carries a complete
+      ``magnet:?xt=urn:btih:…`` URI from a torrent-only source (e.g.
+      AudioBookBay). The download manager skips HTTP fetch + .torrent
+      generation entirely and the torznab download endpoint emits an
+      HTTP 302 redirect to ``magnet_uri`` which Prowlarr / *arr / the
+      torrent client follow natively. ``download_url`` is then ignored
+      (callers may set it to the magnet for symmetry).
     """
 
     download_url: str
@@ -95,6 +102,7 @@ class DownloadInfo:
     filename_hint: str
     extra_headers: dict[str, str] = field(default_factory=dict)
     local_path: Path | None = None
+    magnet_uri: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
